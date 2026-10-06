@@ -338,7 +338,7 @@ function showHelp(kind) {
     helpContent.innerHTML = `
       <p><strong>Classical Minesweeper PWA</strong> — a clean-room, Windows 95-inspired web implementation.</p>
       <p>Unlike traditional random Minesweeper, every generated field is tested by a deduction solver. If the solver would have to guess, that field is discarded before play begins.</p>
-      <p>Version 1.0.0. No Microsoft code, artwork, or game assets are included.</p>`;
+      <p>Version 1.0.1. No Microsoft code, artwork, or game assets are included.</p>`;
   } else {
     helpTitle.textContent = 'How to Play';
     helpContent.innerHTML = `

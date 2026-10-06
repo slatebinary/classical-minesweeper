@@ -108,18 +108,128 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
   width: 40px; height: 40px; padding: 0; position: relative; background: var(--win-gray);
   border-top: 3px solid #fff; border-left: 3px solid #fff; border-right: 3px solid #000; border-bottom: 3px solid #000;
 }
-.face-button:active, .face-button.depressed { border-top-color: #000; border-left-color: #000; border-right-color: #fff; border-bottom-color: #fff; }
-.face { position: absolute; inset: 5px; border-radius: 50%; background: #ffff00; border: 2px solid #000; }
+.face-button:active, .face-button.depressed {
+  border-top-color: #000; border-left-color: #000; border-right-color: #fff; border-bottom-color: #fff;
+}
+
+/* Windows 95-style status face. The features are drawn on a tiny pixel grid so
+   they stay centered and do not spill outside the yellow face. */
+.face {
+  position: absolute;
+  inset: 6px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 2px solid #000;
+  border-radius: 50%;
+  background: #ffff00;
+}
+.face-button:active .face,
+.face-button.depressed .face { transform: translate(1px, 1px); }
+
+/* Eyes */
 .face::before {
-  content: ""; position: absolute; width: 3px; height: 5px; background: #000; left: 7px; top: 6px; box-shadow: 10px 0 #000;
+  content: "";
+  position: absolute;
+  width: 3px;
+  height: 5px;
+  left: 5px;
+  top: 5px;
+  background: #000;
+  box-shadow: 11px 0 0 #000;
 }
+
+/* Pixel smile: seven 2x2 blocks forming the classic shallow curve. */
 .face::after {
-  content: ""; position: absolute; width: 12px; height: 6px; left: 6px; top: 15px; border-bottom: 2px solid #000; border-radius: 0 0 12px 12px;
+  content: "";
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  left: 5px;
+  top: 13px;
+  background: #000;
+  box-shadow:
+    2px 2px 0 #000,
+    4px 4px 0 #000,
+    6px 5px 0 #000,
+    8px 5px 0 #000,
+    10px 4px 0 #000,
+    12px 2px 0 #000,
+    14px 0 0 #000;
 }
-.face-button.surprised .face::after { width: 7px; height: 7px; left: 9px; top: 15px; border: 2px solid #000; border-radius: 50%; }
-.face-button.dead .face::before { width: 5px; height: 2px; transform: rotate(45deg); top: 8px; left: 6px; box-shadow: 11px 0 #000; }
-.face-button.dead .face::after { width: 11px; height: 5px; left: 6px; top: 17px; border-top: 2px solid #000; border-bottom: 0; border-radius: 10px 10px 0 0; }
-.face-button.cool .face::before { width: 7px; height: 3px; left: 4px; top: 7px; background: #000; box-shadow: 11px 0 #000, 5px 2px #000, 8px 2px #000; }
+
+/* Surprised face while a covered cell is held down / a field is generated. */
+.face-button.surprised .face::after {
+  width: 6px;
+  height: 8px;
+  left: 9px;
+  top: 12px;
+  background: transparent;
+  border: 2px solid #000;
+  border-radius: 50%;
+  box-shadow: none;
+}
+
+/* Dead face: X eyes and a small pixel frown. */
+.face-button.dead .face::before {
+  width: 2px;
+  height: 2px;
+  left: 5px;
+  top: 5px;
+  background: #000;
+  box-shadow:
+    4px 0 0 #000,
+    2px 2px 0 #000,
+    0 4px 0 #000,
+    4px 4px 0 #000,
+    11px 0 0 #000,
+    15px 0 0 #000,
+    13px 2px 0 #000,
+    11px 4px 0 #000,
+    15px 4px 0 #000;
+}
+.face-button.dead .face::after {
+  width: 2px;
+  height: 2px;
+  left: 6px;
+  top: 17px;
+  background: #000;
+  border: 0;
+  border-radius: 0;
+  box-shadow:
+    2px -2px 0 #000,
+    4px -3px 0 #000,
+    6px -3px 0 #000,
+    8px -3px 0 #000,
+    10px -2px 0 #000,
+    12px 0 0 #000;
+}
+
+/* Win face: compact sunglasses plus the normal smile. */
+.face-button.cool .face::before {
+  width: 7px;
+  height: 4px;
+  left: 3px;
+  top: 5px;
+  background: #000;
+  box-shadow: 12px 0 0 #000, 7px 1px 0 #000, 9px 1px 0 #000;
+}
+.face-button.cool .face::after {
+  width: 2px;
+  height: 2px;
+  left: 5px;
+  top: 13px;
+  background: #000;
+  border: 0;
+  border-radius: 0;
+  box-shadow:
+    2px 2px 0 #000,
+    4px 4px 0 #000,
+    6px 5px 0 #000,
+    8px 5px 0 #000,
+    10px 4px 0 #000,
+    12px 2px 0 #000,
+    14px 0 0 #000;
+}
 
 .board-frame { overflow: auto; max-width: calc(100vw - 42px); max-height: calc(100dvh - 190px); }
 .board {
