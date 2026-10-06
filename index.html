@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#c0c0c0">
+  <meta name="description" content="A Windows 95-inspired Minesweeper PWA with guaranteed no-guess boards.">
+  <title>Minesweeper</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="desktop-shell">
+    <section class="window" aria-label="Minesweeper game window">
+      <header class="title-bar">
+        <div class="title-left">
+          <span class="title-icon" aria-hidden="true"></span>
+          <span>Minesweeper</span>
+        </div>
+        <div class="window-controls" aria-hidden="true">
+          <span class="win-btn">_</span><span class="win-btn">□</span><span class="win-btn">×</span>
+        </div>
+      </header>
+
+      <nav class="menu-bar" aria-label="Application menu">
+        <div class="menu-wrap">
+          <button class="menu-trigger" id="game-menu-button" aria-haspopup="true" aria-expanded="false"><u>G</u>ame</button>
+          <div class="menu-popup" id="game-menu" role="menu" hidden>
+            <button role="menuitem" data-action="new"><span>New</span><kbd>F2</kbd></button>
+            <div class="menu-separator"></div>
+            <button role="menuitemradio" data-difficulty="beginner"><span class="check-slot"></span><span>Beginner</span></button>
+            <button role="menuitemradio" data-difficulty="intermediate"><span class="check-slot"></span><span>Intermediate</span></button>
+            <button role="menuitemradio" data-difficulty="expert"><span class="check-slot"></span><span>Expert</span></button>
+            <div class="menu-separator"></div>
+            <button role="menuitem" data-action="best-times"><span>Best Times...</span></button>
+            <button role="menuitem" class="static-check" disabled><span class="check-slot">✓</span><span>No-guess boards</span></button>
+          </div>
+        </div>
+        <div class="menu-wrap">
+          <button class="menu-trigger" id="help-menu-button" aria-haspopup="true" aria-expanded="false"><u>H</u>elp</button>
+          <div class="menu-popup" id="help-menu" role="menu" hidden>
+            <button role="menuitem" data-action="how-to-play"><span>How to Play</span></button>
+            <button role="menuitem" data-action="install" id="install-menu-item" hidden><span>Install App...</span></button>
+            <div class="menu-separator"></div>
+            <button role="menuitem" data-action="about"><span>About Minesweeper...</span></button>
+          </div>
+        </div>
+      </nav>
+
+      <div class="game-inset">
+        <section class="status-panel" aria-label="Game status">
+          <div class="counter" id="mine-counter" aria-label="Mines remaining">010</div>
+          <button class="face-button" id="face-button" type="button" aria-label="New game"><span class="face" aria-hidden="true"></span></button>
+          <div class="counter" id="timer" aria-label="Elapsed seconds">000</div>
+        </section>
+
+        <div class="board-frame">
+          <div class="board" id="board" role="grid" aria-label="Minesweeper board"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="touch-controls" id="touch-controls" aria-label="Touch controls">
+      <button type="button" data-touch-mode="reveal" class="pressed">Reveal</button>
+      <button type="button" data-touch-mode="flag">Flag</button>
+    </div>
+    <p class="generation-note" id="generation-note" aria-live="polite">Every board is generated to be solvable by deduction without guessing.</p>
+  </main>
+
+  <dialog id="best-times-dialog" class="win-dialog">
+    <form method="dialog">
+      <div class="dialog-title">Fastest Mine Sweepers</div>
+      <div class="dialog-body">
+        <table class="times-table">
+          <tbody>
+            <tr><th>Beginner:</th><td id="best-beginner">---</td></tr>
+            <tr><th>Intermediate:</th><td id="best-intermediate">---</td></tr>
+            <tr><th>Expert:</th><td id="best-expert">---</td></tr>
+          </tbody>
+        </table>
+        <div class="dialog-buttons">
+          <button value="close">OK</button>
+          <button type="button" id="reset-times">Reset Scores</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="help-dialog" class="win-dialog wide-dialog">
+    <form method="dialog">
+      <div class="dialog-title" id="help-title">Minesweeper Help</div>
+      <div class="dialog-body" id="help-content"></div>
+      <div class="dialog-buttons"><button value="close">OK</button></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

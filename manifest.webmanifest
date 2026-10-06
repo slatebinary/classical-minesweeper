@@ -1,0 +1,17 @@
+{
+  "name": "Classical Minesweeper",
+  "short_name": "Minesweeper",
+  "description": "Windows 95-inspired Minesweeper with guaranteed no-guess boards.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#008080",
+  "theme_color": "#c0c0c0",
+  "orientation": "any",
+  "categories": ["games", "puzzle"],
+  "icons": [
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./icons/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
