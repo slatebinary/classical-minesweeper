@@ -22,7 +22,7 @@ The key difference from ordinary Minesweeper is **no-guess generation**: after y
 - Double-click a revealed number to chord-open surrounding cells when its flag count matches.
 - F2 or the face button starts a new game.
 - Synthesized reveal, marking, explosion, and win sounds with a persistent Sound on/off option.
-- Persistent light and dark themes while preserving the classic bevelled interface.
+- Persistent System, Light, and Dark themes while preserving the classic bevelled interface. System follows the device/OS preference live.
 - Local play statistics, unlockable achievements, and JSON export (including iOS Share/Save to Files when available).
 - Local best times for Beginner, Intermediate and Expert.
 - PWA manifest and service worker for installability and offline play.
@@ -108,12 +108,20 @@ This project is an original clean-room implementation. It does **not** contain M
 
 MIT License. See `LICENSE`.
 
+## v1.1.1
+
+- Adds a persistent footer credit beside the version: “Dedicated to my daughter Lilly ♥”.
+- Adds **System theme** alongside Light and Dark.
+- System theme follows the OS/browser `prefers-color-scheme` setting and updates live if the system appearance changes.
+- New installations default to System theme; existing explicit Light/Dark choices remain respected.
+- Includes the dedication in the About dialog and achievement export metadata.
+
 ## v1.1.0
 
 - Replaces the separate touch Reveal/Flag mode with direct gestures: short tap reveals, long press marks.
 - Adds synthesized high-pitch reveal feedback, low-pitch marking feedback, mine explosion audio, and a short win fanfare.
 - Adds a persistent Sound on/off option.
-- Adds persistent Light and Dark themes.
+- Adds persistent Light and Dark themes (expanded with System theme in v1.1.1).
 - Adds play statistics and achievements for wins, difficulty clears, streaks, completed games, and speed milestones.
 - Adds achievement/statistics export as JSON, using the native share sheet for files when supported.
 - Keeps the v1.0.2 dynamic full-board fitting for iPhone and other narrow screens.

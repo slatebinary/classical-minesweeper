@@ -1,6 +1,7 @@
 import { generateCandidate, isLogicallySolvable } from './src/logic.js';
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.1.1';
+const DEDICATION = 'Dedicated to my daughter Lilly ♥';
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
 const STATS_KEY = 'minesweeper:stats:v1';
@@ -48,8 +49,9 @@ let generationRequest = 0;
 let generatorWorker = null;
 let deferredInstallPrompt = null;
 let soundEnabled = localStorage.getItem('minesweeper:sound') !== 'off';
-let theme = localStorage.getItem('minesweeper:theme') || 'light';
-if (!['light', 'dark'].includes(theme)) theme = 'light';
+const systemThemeQuery = window.matchMedia?.('(prefers-color-scheme: dark)') || null;
+let theme = localStorage.getItem('minesweeper:theme') || 'system';
+if (!['system', 'light', 'dark'].includes(theme)) theme = 'system';
 let audioContext = null;
 let touchPress = null;
 let suppressClickUntil = 0;
@@ -168,16 +170,27 @@ function updateDifficultyChecks() {
   });
 }
 
+function resolvedTheme(preference = theme) {
+  if (preference === 'system') return systemThemeQuery?.matches ? 'dark' : 'light';
+  return preference === 'dark' ? 'dark' : 'light';
+}
+
 function applyTheme(nextTheme, persist = true) {
-  theme = nextTheme === 'dark' ? 'dark' : 'light';
-  document.documentElement.dataset.theme = theme;
-  themeColorMeta?.setAttribute('content', theme === 'dark' ? '#202424' : '#c0c0c0');
+  theme = ['system', 'light', 'dark'].includes(nextTheme) ? nextTheme : 'system';
+  const effectiveTheme = resolvedTheme(theme);
+  document.documentElement.dataset.theme = effectiveTheme;
+  document.documentElement.dataset.themePreference = theme;
+  themeColorMeta?.setAttribute('content', effectiveTheme === 'dark' ? '#202424' : '#c0c0c0');
   if (persist) localStorage.setItem('minesweeper:theme', theme);
   document.querySelectorAll('[data-theme]').forEach((button) => {
     const active = button.dataset.theme === theme;
     button.setAttribute('aria-checked', String(active));
     button.querySelector('.check-slot').textContent = active ? '✓' : '';
   });
+}
+
+function handleSystemThemeChange() {
+  if (theme === 'system') applyTheme('system', false);
 }
 
 function updateSoundMenu() {
@@ -395,6 +408,7 @@ function buildAchievementExport() {
   return {
     app: 'Classical Minesweeper PWA',
     appVersion: APP_VERSION,
+    dedication: DEDICATION,
     exportVersion: 1,
     exportedAt: new Date().toISOString(),
     bestTimesSeconds: bestTimes,
@@ -675,7 +689,8 @@ function showHelp(kind) {
     helpContent.innerHTML = `
       <p><strong>Classical Minesweeper PWA</strong> — a clean-room, Windows 95-inspired web implementation.</p>
       <p>Unlike traditional random Minesweeper, every generated field is tested by a deduction solver. If the solver would have to guess, that field is discarded before play begins.</p>
-      <p>Version ${APP_VERSION}. Sounds are synthesized in the browser; no Microsoft code, artwork, sounds, or game assets are included.</p>`;
+      <p>Version ${APP_VERSION} · ${DEDICATION}</p>
+      <p>Sounds are synthesized in the browser; no Microsoft code, artwork, sounds, or game assets are included.</p>`;
   } else {
     helpTitle.textContent = 'How to Play';
     helpContent.innerHTML = `
@@ -895,6 +910,10 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
 
+if (systemThemeQuery?.addEventListener) systemThemeQuery.addEventListener('change', handleSystemThemeChange);
+else systemThemeQuery?.addListener?.(handleSystemThemeChange);
+
+document.querySelector('#app-version').textContent = `v${APP_VERSION}`;
 applyTheme(theme, false);
 updateSoundMenu();
 newGame();

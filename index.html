@@ -8,6 +8,17 @@
   <title>Minesweeper</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <script>
+    (() => {
+      try {
+        const preference = localStorage.getItem('minesweeper:theme') || 'system';
+        const dark = preference === 'dark' || (preference === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      } catch {
+        document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -44,7 +55,8 @@
           <div class="menu-popup" id="options-menu" role="menu" hidden>
             <button role="menuitemcheckbox" data-setting="sound" aria-checked="true"><span class="check-slot" id="sound-check">✓</span><span>Sound</span></button>
             <div class="menu-separator"></div>
-            <button role="menuitemradio" data-theme="light" aria-checked="true"><span class="check-slot"></span><span>Light theme</span></button>
+            <button role="menuitemradio" data-theme="system" aria-checked="true"><span class="check-slot">✓</span><span>System theme</span></button>
+            <button role="menuitemradio" data-theme="light" aria-checked="false"><span class="check-slot"></span><span>Light theme</span></button>
             <button role="menuitemradio" data-theme="dark" aria-checked="false"><span class="check-slot"></span><span>Dark theme</span></button>
           </div>
         </div>
@@ -74,6 +86,7 @@
 
     <p class="touch-hint" id="touch-hint">Tap to reveal · Hold to flag</p>
     <p class="generation-note" id="generation-note" aria-live="polite">Every board is generated to be solvable by deduction without guessing.</p>
+    <p class="app-credit"><span id="app-version">v1.1.1</span><span class="credit-separator" aria-hidden="true"> · </span><span>Dedicated to my daughter Lilly <span class="dedication-heart" aria-label="heart">♥</span></span></p>
   </main>
 
   <dialog id="best-times-dialog" class="win-dialog">
