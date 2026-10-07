@@ -264,9 +264,13 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
   height: 100%;
   margin: 0;
   padding: 0;
-  opacity: 0;
+  /* Keep a tiny non-zero opacity so WebKit continues to treat this as a
+     rendered native switch while remaining visually imperceptible. */
+  opacity: 0.001;
   z-index: 4;
   cursor: default;
+  -webkit-appearance: auto;
+  appearance: auto;
   touch-action: manipulation;
 }
 .cell.revealed { border: 1px solid #808080; }

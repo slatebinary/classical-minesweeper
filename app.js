@@ -1,6 +1,6 @@
 import { generateCandidate, isLogicallySolvable } from './src/logic.js';
 
-const APP_VERSION = '1.1.7';
+const APP_VERSION = '1.1.8';
 const DEDICATION = 'Dedicated to my daughter Lilly ♥';
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
@@ -126,6 +126,40 @@ function setFace(kind = 'normal') {
   if (kind !== 'normal') faceButton.classList.add(kind);
 }
 
+let iosHapticActionSequence = 0;
+
+function completeIOSHapticAction(proxy, actionId) {
+  if (!proxy || proxy.dataset.pendingActionId !== actionId) return;
+  const action = proxy.dataset.pendingAction;
+  const index = Number(proxy.dataset.index);
+  delete proxy.dataset.pendingAction;
+  delete proxy.dataset.pendingActionId;
+  if (proxy._actionFallbackTimer) {
+    clearTimeout(proxy._actionFallbackTimer);
+    proxy._actionFallbackTimer = 0;
+  }
+  proxy.blur();
+  if (action === 'reveal') revealCell(index);
+  else if (action === 'mark') cycleMark(index);
+}
+
+function queueIOSHapticAction(proxy, action) {
+  if (!proxy?.isConnected) return false;
+  const actionId = String(++iosHapticActionSequence);
+  proxy.dataset.pendingAction = action;
+  proxy.dataset.pendingActionId = actionId;
+  if (proxy._actionFallbackTimer) clearTimeout(proxy._actionFallbackTimer);
+
+  // WebKit normally dispatches a synthetic click when the finger is released.
+  // iOS 18 has known intermittent click/touch delivery issues, so keep a small
+  // fallback to make sure the game action still happens even if that click is
+  // lost. The fallback cannot manufacture haptics; it only preserves gameplay.
+  proxy._actionFallbackTimer = window.setTimeout(() => {
+    completeIOSHapticAction(proxy, actionId);
+  }, 220);
+  return true;
+}
+
 function makeIOSHapticProxy(index) {
   const proxy = document.createElement('input');
   proxy.type = 'checkbox';
@@ -136,18 +170,14 @@ function makeIOSHapticProxy(index) {
   proxy.setAttribute('aria-hidden', 'true');
   proxy.setAttribute('autocomplete', 'off');
 
-  // Do not prevent the native click: WebKit's default switch action is what
-  // produces the iPhone Taptic Engine tick. Defer the game reveal until after
-  // that default action, otherwise removing the control too early can suppress
-  // the haptic.
+  // The native switch must finish its own direct-touch default action before we
+  // reveal/mark the Minesweeper cell. This is particularly important for a long
+  // press: mutating the cell while WebKit is still tracking the switch can make
+  // its haptic feedback intermittent.
   proxy.addEventListener('click', (event) => {
     event.stopPropagation();
-    const pending = proxy.dataset.revealPending;
-    delete proxy.dataset.revealPending;
-    setTimeout(() => {
-      proxy.blur();
-      if (pending !== undefined) revealCell(Number(pending));
-    }, 0);
+    const actionId = proxy.dataset.pendingActionId;
+    if (actionId) setTimeout(() => completeIOSHapticAction(proxy, actionId), 0);
   });
   return proxy;
 }
@@ -289,7 +319,7 @@ function updateTactileMenu() {
   button?.setAttribute('aria-checked', String(tactileEnabled));
   if (!button) return;
   if (USE_IOS_NATIVE_SWITCH_HAPTICS) {
-    button.title = 'On iPhone, covered cells use the native WebKit switch haptic. Android uses device vibration when supported.';
+    button.title = 'Android uses device vibration when supported. iPhone uses a best-effort native WebKit switch haptic, which iOS may not deliver on every gesture.';
   } else if (typeof navigator.vibrate === 'function') {
     button.title = 'Uses device vibration/haptics.';
   } else {
@@ -906,7 +936,7 @@ function showHelp(kind) {
       <p><strong>Classical Minesweeper PWA</strong> — a clean-room, Windows 95-inspired web implementation.</p>
       <p>Unlike traditional random Minesweeper, every generated field is tested by a deduction solver. If the solver would have to guess, that field is discarded before play begins.</p>
       <p>Version ${APP_VERSION} · ${DEDICATION}</p>
-      <p>Sounds are synthesized in the browser. Tactile feedback uses the Vibration API on supported Android browsers. On iPhone with iOS 18 or later, covered cells use WebKit's native switch haptic for a direct-tap Taptic Engine tick. It can be switched off under Options.</p>
+      <p>Sounds are synthesized in the browser. Tactile feedback uses the Vibration API on supported Android browsers. On iPhone with iOS 18 or later, covered cells use a best-effort WebKit native-switch haptic. iOS does not provide a general web haptics API, so a tick cannot be guaranteed on every gesture. It can be switched off under Options.</p>
       <p>No Microsoft code, artwork, sounds, or game assets are included.</p>`;
   } else {
     helpTitle.textContent = 'How to Play';
@@ -1336,7 +1366,15 @@ boardEl.addEventListener('pointerdown', (event) => {
     cell.classList.remove('pressing');
     cell.classList.add('long-press-active');
     setTimeout(() => cell.classList.remove('long-press-active'), 140);
-    if (cycleMark(index)) tactile([18, 24, 26]);
+
+    if (press.iosHapticProxy) {
+      // Do not change the cell yet. iOS/WebKit's switch has its own long-hold
+      // tracking. Let the finger release, allow the native switch to toggle and
+      // produce its haptic tick, and only then apply the flag/question action.
+    } else if (cycleMark(index)) {
+      tactile([18, 24, 26]);
+    }
+
     suppressClickUntil = performance.now() + 750;
     suppressContextMenuUntil = performance.now() + 900;
     if (status !== 'lost' && status !== 'won' && status !== 'generating') setFace('normal');
@@ -1363,14 +1401,12 @@ boardEl.addEventListener('pointerup', (event) => {
   touchPress = null;
   suppressClickUntil = performance.now() + 750;
   suppressContextMenuUntil = performance.now() + 900;
-  if (!press.longPressed) {
-    if (press.iosHapticProxy?.isConnected) {
-      // Let the native switch click complete first, then reveal from its click
-      // handler so the iPhone haptic is not lost when the cell is repainted.
-      press.iosHapticProxy.dataset.revealPending = String(press.index);
-    } else {
-      revealCell(press.index);
-    }
+  if (press.iosHapticProxy?.isConnected) {
+    // Both a short reveal and a long-press mark are deferred until after the
+    // native switch click. This avoids fighting WebKit's switch gesture state.
+    queueIOSHapticAction(press.iosHapticProxy, press.longPressed ? 'mark' : 'reveal');
+  } else if (!press.longPressed) {
+    revealCell(press.index);
   }
   if (status !== 'lost' && status !== 'won' && status !== 'generating') setFace('normal');
 });

@@ -113,12 +113,19 @@ This project is an original clean-room implementation. It does **not** contain M
 
 MIT License. See `LICENSE`.
 
+## v1.1.8
+
+- Improves iPhone/iOS tactile reliability by no longer changing a Minesweeper cell while WebKit is still tracking the hidden native switch used for haptics.
+- On iPhone, both short-tap reveal and long-press flag/question actions now wait until the native switch has completed its direct-touch click, giving WebKit the best chance to emit its Taptic Engine tick.
+- Adds a small fallback so the game action still completes if an iOS 18 WebKit click event is intermittently lost.
+- Keeps the native switch technically rendered at near-zero opacity rather than fully transparent.
+- Clarifies that iPhone web haptics remain best-effort because iOS does not expose a general-purpose vibration/haptics API to PWAs.
+
 ## v1.1.7
 
-- Fixes tactile feedback on iPhone/iOS 18+ by using a directly tapped transparent native WebKit `<input type="checkbox" switch>` over covered cells.
+- Adds the directly tapped native WebKit `<input type="checkbox" switch>` fallback for iPhone/iOS 18+ haptic feedback on covered cells.
 - Android and other supporting browsers continue to use `navigator.vibrate()`.
 - iPhone haptics are limited to the system switch tick; custom vibration patterns are not available to web apps.
-- The iPhone game action is deferred until after the native switch click so repainting a cell cannot cancel the haptic.
 - Tactile feedback remains ON by default and switchable under **Options**.
 
 ## v1.1.6
@@ -185,3 +192,4 @@ MIT License. See `LICENSE`.
 - Recalculates cell size after rotation and viewport resizing.
 - Scales cell bevels, flags, mines, and wrong-flag marks for compact mobile cells.
 - Keeps the classic 24–26 px cell size whenever the full board already fits.
+
