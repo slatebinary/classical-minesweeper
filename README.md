@@ -17,10 +17,13 @@ The key difference from ordinary Minesweeper is **no-guess generation**: after y
 - Windows 95-inspired grey bevelled UI, title bar, menus, counters, face button and classic number colours.
 - Guaranteed first-click safety, including the eight surrounding cells.
 - Guaranteed no-guess boards for all built-in difficulty levels.
-- Left-click reveal, right-click flag → question mark → clear.
+- Mouse: left-click reveal; right-click cycles flag → question mark → clear.
+- Touch: short tap reveals; press-and-hold cycles flag → question mark → clear.
 - Double-click a revealed number to chord-open surrounding cells when its flag count matches.
 - F2 or the face button starts a new game.
-- Touchscreen Reveal / Flag controls for phones and tablets.
+- Synthesized reveal, marking, explosion, and win sounds with a persistent Sound on/off option.
+- Persistent light and dark themes while preserving the classic bevelled interface.
+- Local play statistics, unlockable achievements, and JSON export (including iOS Share/Save to Files when available).
 - Local best times for Beginner, Intermediate and Expert.
 - PWA manifest and service worker for installability and offline play.
 - Works from a GitHub Pages project subdirectory; no absolute-path assumptions.
@@ -104,3 +107,20 @@ This project is an original clean-room implementation. It does **not** contain M
 ## License
 
 MIT License. See `LICENSE`.
+
+## v1.1.0
+
+- Replaces the separate touch Reveal/Flag mode with direct gestures: short tap reveals, long press marks.
+- Adds synthesized high-pitch reveal feedback, low-pitch marking feedback, mine explosion audio, and a short win fanfare.
+- Adds a persistent Sound on/off option.
+- Adds persistent Light and Dark themes.
+- Adds play statistics and achievements for wins, difficulty clears, streaks, completed games, and speed milestones.
+- Adds achievement/statistics export as JSON, using the native share sheet for files when supported.
+- Keeps the v1.0.2 dynamic full-board fitting for iPhone and other narrow screens.
+
+## v1.0.2
+
+- Dynamically fits the entire minefield to the current viewport on phones and narrow windows.
+- Recalculates cell size after rotation and viewport resizing.
+- Scales cell bevels, flags, mines, and wrong-flag marks for compact mobile cells.
+- Keeps the classic 24–26 px cell size whenever the full board already fits.

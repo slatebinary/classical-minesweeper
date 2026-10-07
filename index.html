@@ -34,7 +34,18 @@
             <button role="menuitemradio" data-difficulty="expert"><span class="check-slot"></span><span>Expert</span></button>
             <div class="menu-separator"></div>
             <button role="menuitem" data-action="best-times"><span>Best Times...</span></button>
+            <button role="menuitem" data-action="achievements"><span>Achievements...</span></button>
+            <div class="menu-separator"></div>
             <button role="menuitem" class="static-check" disabled><span class="check-slot">✓</span><span>No-guess boards</span></button>
+          </div>
+        </div>
+        <div class="menu-wrap">
+          <button class="menu-trigger" id="options-menu-button" aria-haspopup="true" aria-expanded="false"><u>O</u>ptions</button>
+          <div class="menu-popup" id="options-menu" role="menu" hidden>
+            <button role="menuitemcheckbox" data-setting="sound" aria-checked="true"><span class="check-slot" id="sound-check">✓</span><span>Sound</span></button>
+            <div class="menu-separator"></div>
+            <button role="menuitemradio" data-theme="light" aria-checked="true"><span class="check-slot"></span><span>Light theme</span></button>
+            <button role="menuitemradio" data-theme="dark" aria-checked="false"><span class="check-slot"></span><span>Dark theme</span></button>
           </div>
         </div>
         <div class="menu-wrap">
@@ -61,10 +72,7 @@
       </div>
     </section>
 
-    <div class="touch-controls" id="touch-controls" aria-label="Touch controls">
-      <button type="button" data-touch-mode="reveal" class="pressed">Reveal</button>
-      <button type="button" data-touch-mode="flag">Flag</button>
-    </div>
+    <p class="touch-hint" id="touch-hint">Tap to reveal · Hold to flag</p>
     <p class="generation-note" id="generation-note" aria-live="polite">Every board is generated to be solvable by deduction without guessing.</p>
   </main>
 
@@ -82,6 +90,21 @@
         <div class="dialog-buttons">
           <button value="close">OK</button>
           <button type="button" id="reset-times">Reset Scores</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="achievements-dialog" class="win-dialog wide-dialog">
+    <form method="dialog">
+      <div class="dialog-title">Minesweeper Achievements</div>
+      <div class="dialog-body">
+        <div class="stats-summary" id="stats-summary"></div>
+        <ul class="achievement-list" id="achievement-list"></ul>
+        <div class="dialog-buttons wrap-buttons">
+          <button type="button" id="export-achievements">Export JSON</button>
+          <button type="button" id="reset-achievements">Reset Statistics</button>
+          <button value="close">OK</button>
         </div>
       </div>
     </form>
