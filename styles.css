@@ -25,6 +25,7 @@ body {
   overscroll-behavior: none;
   overflow-x: hidden;
   user-select: none;
+  -webkit-user-select: none;
 }
 button { font: inherit; color: inherit; }
 button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
@@ -237,7 +238,7 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
     14px 0 0 #000;
 }
 
-.board-frame { overflow: hidden; max-width: none; max-height: calc(100dvh - 190px); }
+.board-frame { overflow: hidden; max-width: none; max-height: none; }
 .board {
   display: grid;
   grid-template-columns: repeat(var(--cols), var(--cell-size));
@@ -297,7 +298,27 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
     calc(var(--cell-size) * -.29) 0 0 calc(var(--cell-size) * -.23) #000;
 }
 .cell.exploded { background: #f00; }
-.cell.wrong-flag::after { content: "×"; position: absolute; inset: 0; color: #f00; font-size: calc(var(--cell-size) * .9); font-weight: 900; text-shadow: 1px 0 #000; }
+.cell.wrong-flag { background: #ffd0d0; }
+.wrong-x {
+  position: absolute;
+  inset: 5%;
+  z-index: 5;
+  pointer-events: none;
+}
+.wrong-x::before,
+.wrong-x::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(2px, 12%);
+  height: 90%;
+  background: #f00;
+  box-shadow: 0 0 0 1px #fff, 1px 1px 0 1px #000;
+  transform-origin: center;
+}
+.wrong-x::before { transform: translate(-50%, -50%) rotate(45deg); }
+.wrong-x::after { transform: translate(-50%, -50%) rotate(-45deg); }
 .cell:active:not(.revealed), .cell.pressing:not(.revealed) { border: 1px solid #808080; }
 .cell.long-press-active:not(.revealed) { filter: brightness(.82); }
 
@@ -316,6 +337,7 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
   text-align: center;
   line-height: 1.3;
   user-select: text;
+  -webkit-user-select: text;
 }
 .dedication-heart { color: #ff4b55; text-shadow: 1px 1px #000; }
 
@@ -329,8 +351,8 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
 .times-table th { text-align: left; font-weight: 400; padding: 4px 14px 4px 0; }
 .times-table td { text-align: right; padding: 4px 0; }
 .wide-dialog { width: 420px; }
-.wide-dialog p { user-select: text; line-height: 1.35; }
-.wide-dialog ul { padding-left: 20px; user-select: text; }
+.wide-dialog p { user-select: text; -webkit-user-select: text; line-height: 1.35; }
+.wide-dialog ul, .wide-dialog ol { padding-left: 20px; user-select: text; -webkit-user-select: text; }
 .stats-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -347,7 +369,13 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
 .wrap-buttons { flex-wrap: wrap; }
 
 @media (pointer: coarse) {
-  .cell { touch-action: manipulation; -webkit-touch-callout: none; }
+  .board,
+  .cell {
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
   .touch-hint { display: block; }
   .generation-note { font-size: 11px; }
   .app-credit { font-size: 10px; }
@@ -356,7 +384,6 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
 @media (max-width: 560px) {
   .desktop-shell { place-items: start center; align-content: start; padding-top: max(8px, env(safe-area-inset-top)); }
   .status-panel { gap: 8px; }
-  .board-frame { max-height: calc(100dvh - 210px); }
 }
 
 /* Optional dark interpretation of the same classic bevelled interface. */
@@ -397,6 +424,7 @@ html[data-theme="dark"] .cell.revealed[data-value="6"] { color: #71dddd; }
 html[data-theme="dark"] .cell.revealed[data-value="7"] { color: #ffffff; }
 html[data-theme="dark"] .cell.revealed[data-value="8"] { color: #bcbcbc; }
 html[data-theme="dark"] .cell.question::before { color: #fff; }
+html[data-theme="dark"] .cell.wrong-flag { background: #642929; }
 html[data-theme="dark"] .win-dialog { color: #f2f2f2; border-color: #666 #111 #111 #666; }
 html[data-theme="dark"] .win-dialog::backdrop { background: rgba(0,0,0,.55); }
 html[data-theme="dark"] button:focus-visible { outline-color: #fff; }

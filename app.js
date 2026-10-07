@@ -1,6 +1,6 @@
 import { generateCandidate, isLogicallySolvable } from './src/logic.js';
 
-const APP_VERSION = '1.1.1';
+const APP_VERSION = '1.1.2';
 const DEDICATION = 'Dedicated to my daughter Lilly ♥';
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
@@ -28,7 +28,6 @@ const achievementList = document.querySelector('#achievement-list');
 const helpDialog = document.querySelector('#help-dialog');
 const helpTitle = document.querySelector('#help-title');
 const helpContent = document.querySelector('#help-content');
-const installMenuItem = document.querySelector('#install-menu-item');
 const soundCheck = document.querySelector('#sound-check');
 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
 
@@ -66,7 +65,13 @@ function formatCounter(value) {
 }
 
 function updateCounter() {
-  mineCounterEl.textContent = formatCounter(config.mines - flagCount);
+  const remaining = config.mines - flagCount;
+  mineCounterEl.textContent = formatCounter(remaining);
+  const label = remaining >= 0
+    ? `${remaining} mine${remaining === 1 ? '' : 's'} remaining`
+    : `${Math.abs(remaining)} extra flag${remaining === -1 ? '' : 's'} placed`;
+  mineCounterEl.setAttribute('aria-label', label);
+  mineCounterEl.title = label;
 }
 
 function updateTimer() {
@@ -120,13 +125,17 @@ function horizontalBorder(element) {
 // Keep the complete minefield visible on narrow screens. The classic desktop
 // cell size is preserved whenever it fits; otherwise every column is fitted.
 function fitBoardToViewport() {
-  const visualWidth = window.visualViewport?.width || document.documentElement.clientWidth || window.innerWidth;
+  // Size against the layout viewport, not visualViewport. On iPhone pinch-zoom
+  // changes visualViewport.width; using it here would shrink the cells again and
+  // cancel the user's zoom gesture. The layout viewport still changes normally
+  // on rotation/resizing, so the board remains responsive without fighting zoom.
+  const layoutWidth = document.documentElement.clientWidth || window.innerWidth;
   const shellChrome = horizontalPadding(desktopShellEl);
   const windowChrome = horizontalPadding(windowEl) + horizontalBorder(windowEl);
   const insetChrome = horizontalPadding(gameInsetEl);
   const frameChrome = horizontalPadding(boardFrameEl) + horizontalBorder(boardFrameEl);
   const safetyGap = 2;
-  const availableBoardWidth = Math.max(1, Math.floor(visualWidth - shellChrome - windowChrome - insetChrome - frameChrome - safetyGap));
+  const availableBoardWidth = Math.max(1, Math.floor(layoutWidth - shellChrome - windowChrome - insetChrome - frameChrome - safetyGap));
 
   const preferredCellSize = matchMedia('(pointer: coarse)').matches ? 26 : 24;
   const fittedCellSize = Math.max(8, Math.min(preferredCellSize, Math.floor((availableBoardWidth / config.cols) * 100) / 100));
@@ -638,7 +647,13 @@ function lose(explodedIndex) {
       cells[i].className = 'cell revealed mine';
       if (i === explodedIndex) cells[i].classList.add('exploded');
     } else if (!board.mines[i] && marks[i] === 1) {
-      cells[i].classList.add('wrong-flag');
+      const cell = cells[i];
+      cell.classList.add('wrong-flag');
+      cell.setAttribute('aria-label', 'Incorrect flag');
+      const cross = document.createElement('span');
+      cross.className = 'wrong-x';
+      cross.setAttribute('aria-hidden', 'true');
+      cell.appendChild(cross);
     }
   }
   generationNote.textContent = 'Mine hit. Press F2 or the face to start a new no-guess field.';
@@ -706,6 +721,64 @@ function showHelp(kind) {
   helpDialog.showModal();
 }
 
+function isStandaloneDisplay() {
+  return window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function isIOSDevice() {
+  return /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function showInstallHelp(message = '') {
+  helpTitle.textContent = 'Install Minesweeper';
+  const intro = message ? `<p><strong>${message}</strong></p>` : '';
+
+  if (isStandaloneDisplay()) {
+    helpContent.innerHTML = `${intro}<p>Minesweeper is already running as an installed app.</p>`;
+  } else if (isIOSDevice()) {
+    helpContent.innerHTML = `${intro}
+      <p>On iPhone and iPad, websites cannot open the PWA installation prompt themselves.</p>
+      <ol>
+        <li>Open this game in <strong>Safari</strong>.</li>
+        <li>Tap the <strong>Share</strong> button.</li>
+        <li>Choose <strong>Add to Home Screen</strong>.</li>
+        <li>Tap <strong>Add</strong>.</li>
+      </ol>
+      <p>The Home Screen version then opens as a standalone app and continues to work offline after it has been cached.</p>`;
+  } else {
+    helpContent.innerHTML = `${intro}
+      <p>If your browser supports direct PWA installation, use the install icon in the address bar or the browser's app/install menu.</p>
+      <p>In Chrome, look for <strong>Install Minesweeper</strong> or <strong>Install app</strong>. In Edge, use <strong>Apps → Install this site as an app</strong>.</p>
+      <p>If no install option is shown, make sure you opened the deployed HTTPS GitHub Pages site rather than a local file or the GitHub repository page.</p>`;
+  }
+  helpDialog.showModal();
+}
+
+async function handleInstallAction() {
+  closeMenus();
+
+  if (isStandaloneDisplay()) {
+    showInstallHelp();
+    return;
+  }
+
+  if (!deferredInstallPrompt) {
+    showInstallHelp();
+    return;
+  }
+
+  try {
+    deferredInstallPrompt.prompt();
+    const choice = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    if (choice?.outcome !== 'accepted') showInstallHelp('Installation was not completed.');
+  } catch {
+    deferredInstallPrompt = null;
+    showInstallHelp('The browser could not open its install prompt.');
+  }
+}
+
 function closeMenus() {
   document.querySelectorAll('.menu-popup').forEach((menu) => { menu.hidden = true; });
   document.querySelectorAll('.menu-trigger').forEach((trigger) => trigger.setAttribute('aria-expanded', 'false'));
@@ -758,12 +831,7 @@ document.querySelector('#help-menu').addEventListener('click', async (event) => 
   closeMenus();
   if (button.dataset.action === 'how-to-play') showHelp('help');
   else if (button.dataset.action === 'about') showHelp('about');
-  else if (button.dataset.action === 'install' && deferredInstallPrompt) {
-    deferredInstallPrompt.prompt();
-    await deferredInstallPrompt.userChoice;
-    deferredInstallPrompt = null;
-    installMenuItem.hidden = true;
-  }
+  else if (button.dataset.action === 'install') await handleInstallAction();
 });
 
 boardEl.addEventListener('click', (event) => {
@@ -801,6 +869,10 @@ boardEl.addEventListener('pointerdown', (event) => {
 
   if (event.pointerType === 'mouse') return;
 
+  // Prevent iOS/Safari long-press text selection/callouts on nearby UI text.
+  event.preventDefault();
+  window.getSelection?.()?.removeAllRanges?.();
+
   cancelTouchPress(false);
   const index = Number(cell.dataset.index);
   const press = {
@@ -814,6 +886,7 @@ boardEl.addEventListener('pointerdown', (event) => {
   press.timer = window.setTimeout(() => {
     if (touchPress !== press) return;
     press.longPressed = true;
+    window.getSelection?.()?.removeAllRanges?.();
     cell.classList.remove('pressing');
     cell.classList.add('long-press-active');
     setTimeout(() => cell.classList.remove('long-press-active'), 140);
@@ -894,17 +967,14 @@ document.querySelector('#reset-achievements').addEventListener('click', () => {
 window.addEventListener('beforeinstallprompt', (event) => {
   event.preventDefault();
   deferredInstallPrompt = event;
-  installMenuItem.hidden = false;
 });
 
 window.addEventListener('appinstalled', () => {
   deferredInstallPrompt = null;
-  installMenuItem.hidden = true;
 });
 
 window.addEventListener('resize', scheduleBoardFit, { passive: true });
 window.addEventListener('orientationchange', scheduleBoardFit, { passive: true });
-window.visualViewport?.addEventListener('resize', scheduleBoardFit, { passive: true });
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));

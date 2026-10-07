@@ -108,6 +108,14 @@ This project is an original clean-room implementation. It does **not** contain M
 
 MIT License. See `LICENSE`.
 
+## v1.1.2
+
+- Fixes **Help → Install App...** so it always responds: native browser install when available, iPhone/iPad Add to Home Screen instructions otherwise, and useful manual fallback instructions on other browsers.
+- Makes incorrect flags much clearer after a loss with a large high-contrast red X while retaining the underlying flag.
+- Keeps classic counter behaviour: placing more flags than the mine total shows a negative counter (for example `-01`), with clearer accessibility text.
+- Prevents iPhone long-press flagging from selecting nearby page text or opening a text-selection callout.
+- Fixes pinch zoom on iPhone by fitting the board to the layout viewport rather than the changing visual viewport; zoom now enlarges the game block instead of being counteracted by cell resizing.
+
 ## v1.1.1
 
 - Adds a persistent footer credit beside the version: “Dedicated to my daughter Lilly ♥”.
