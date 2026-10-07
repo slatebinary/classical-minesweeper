@@ -1,6 +1,6 @@
 import { generateCandidate, isLogicallySolvable } from './src/logic.js';
 
-const APP_VERSION = '1.1.2';
+const APP_VERSION = '1.1.3';
 const DEDICATION = 'Dedicated to my daughter Lilly ♥';
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
@@ -25,6 +25,7 @@ const bestTimesDialog = document.querySelector('#best-times-dialog');
 const achievementsDialog = document.querySelector('#achievements-dialog');
 const statsSummary = document.querySelector('#stats-summary');
 const achievementList = document.querySelector('#achievement-list');
+const importAchievementsFile = document.querySelector('#import-achievements-file');
 const helpDialog = document.querySelector('#help-dialog');
 const helpTitle = document.querySelector('#help-title');
 const helpContent = document.querySelector('#help-content');
@@ -424,6 +425,108 @@ function buildAchievementExport() {
     statistics: stats,
     achievements: getAchievements(stats, bestTimes).filter((item) => item.earned).map(({ id, name, description }) => ({ id, name, description }))
   };
+}
+
+
+function sanitizeNonNegativeInteger(value, fallback = 0) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return fallback;
+  return Math.floor(number);
+}
+
+function sanitizeImportedDate(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) return null;
+  return new Date(value).toISOString();
+}
+
+function normalizeImportedStats(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('The file does not contain valid Minesweeper statistics.');
+
+  const stats = defaultStats();
+  for (const key of Object.keys(PRESETS)) {
+    stats.wins[key] = sanitizeNonNegativeInteger(raw.wins?.[key]);
+    stats.losses[key] = sanitizeNonNegativeInteger(raw.losses?.[key]);
+    const minimumStarted = stats.wins[key] + stats.losses[key];
+    stats.gamesStarted[key] = Math.max(minimumStarted, sanitizeNonNegativeInteger(raw.gamesStarted?.[key]));
+  }
+
+  const totalWins = Object.values(stats.wins).reduce((sum, value) => sum + value, 0);
+  stats.currentWinStreak = Math.min(totalWins, sanitizeNonNegativeInteger(raw.currentWinStreak));
+  stats.bestWinStreak = Math.max(stats.currentWinStreak, sanitizeNonNegativeInteger(raw.bestWinStreak));
+  stats.totalSafeCellsRevealed = sanitizeNonNegativeInteger(raw.totalSafeCellsRevealed);
+  stats.firstPlayedAt = sanitizeImportedDate(raw.firstPlayedAt);
+  stats.lastPlayedAt = sanitizeImportedDate(raw.lastPlayedAt);
+  stats.lastWinAt = sanitizeImportedDate(raw.lastWinAt);
+  return stats;
+}
+
+function normalizeImportedBestTimes(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('The file does not contain valid best times.');
+  const best = {};
+  for (const key of Object.keys(PRESETS)) {
+    const value = raw[key];
+    if (value === null || value === undefined || value === '') {
+      best[key] = null;
+      continue;
+    }
+    const number = Number(value);
+    if (!Number.isFinite(number) || number < 0 || number > 999) throw new Error(`Invalid ${PRESETS[key].label} best time.`);
+    best[key] = Math.floor(number);
+  }
+  return best;
+}
+
+function parseAchievementImport(text) {
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new Error('The selected file is not valid JSON.');
+  }
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('The selected JSON file is not a Minesweeper backup.');
+  if (payload.app && payload.app !== 'Classical Minesweeper PWA') throw new Error('This JSON file belongs to a different application.');
+  if (payload.exportVersion !== 1) throw new Error('This backup format is not supported by this version of Minesweeper.');
+
+  return {
+    stats: normalizeImportedStats(payload.statistics),
+    bestTimes: normalizeImportedBestTimes(payload.bestTimesSeconds)
+  };
+}
+
+function applyAchievementImport(imported) {
+  saveStats(imported.stats);
+  for (const key of Object.keys(PRESETS)) {
+    const storageKey = `minesweeper:best:${key}`;
+    const value = imported.bestTimes[key];
+    if (value === null) localStorage.removeItem(storageKey);
+    else localStorage.setItem(storageKey, String(value));
+  }
+  renderAchievements();
+  renderBestTimes();
+}
+
+async function importAchievements(file) {
+  if (!file) return;
+  if (file.size > 1_000_000) {
+    window.alert('That JSON file is unexpectedly large. Please select a Minesweeper achievements export.');
+    return;
+  }
+
+  let imported;
+  try {
+    imported = parseAchievementImport(await file.text());
+  } catch (error) {
+    window.alert(error?.message || 'The JSON file could not be imported.');
+    return;
+  }
+
+  const proceed = window.confirm('Import this Minesweeper backup? This will replace the local statistics, achievements and best times currently stored on this device.');
+  if (!proceed) return;
+
+  applyAchievementImport(imported);
+  window.alert('Minesweeper statistics, achievements and best times were imported successfully.');
 }
 
 async function exportAchievements() {
@@ -955,6 +1058,18 @@ document.querySelector('#reset-times').addEventListener('click', () => {
 });
 
 document.querySelector('#export-achievements').addEventListener('click', () => exportAchievements());
+document.querySelector('#import-achievements').addEventListener('click', () => {
+  importAchievementsFile.value = '';
+  importAchievementsFile.click();
+});
+importAchievementsFile.addEventListener('change', async () => {
+  const [file] = importAchievementsFile.files || [];
+  try {
+    await importAchievements(file);
+  } finally {
+    importAchievementsFile.value = '';
+  }
+});
 
 document.querySelector('#reset-achievements').addEventListener('click', () => {
   if (!window.confirm('Reset all statistics, achievements and best times?')) return;

@@ -23,7 +23,7 @@ The key difference from ordinary Minesweeper is **no-guess generation**: after y
 - F2 or the face button starts a new game.
 - Synthesized reveal, marking, explosion, and win sounds with a persistent Sound on/off option.
 - Persistent System, Light, and Dark themes while preserving the classic bevelled interface. System follows the device/OS preference live.
-- Local play statistics, unlockable achievements, and JSON export (including iOS Share/Save to Files when available).
+- Local play statistics, unlockable achievements, and JSON export/import (including iOS Share/Save to Files when available).
 - Local best times for Beginner, Intermediate and Expert.
 - PWA manifest and service worker for installability and offline play.
 - Works from a GitHub Pages project subdirectory; no absolute-path assumptions.
@@ -107,6 +107,14 @@ This project is an original clean-room implementation. It does **not** contain M
 ## License
 
 MIT License. See `LICENSE`.
+
+## v1.1.3
+
+- Adds **Import JSON** beside Export JSON in the Achievements dialog.
+- Restores statistics, derived achievements, and Beginner/Intermediate/Expert best times from this app's exported JSON format.
+- Validates the backup before changing local data; malformed, oversized, incompatible, or foreign-app JSON is rejected without changing the current records.
+- Requires confirmation before replacing local statistics and best times, and refreshes the Achievements and Best Times displays immediately after a successful restore.
+- On iPhone/iPad the import button opens the normal Files picker through the browser/PWA.
 
 ## v1.1.2
 
