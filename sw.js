@@ -1,4 +1,5 @@
-const CACHE_NAME = 'classical-minesweeper-v1.1.5';
+const APP_VERSION = '1.1.6';
+const CACHE_NAME = `classical-minesweeper-v${APP_VERSION}`;
 const APP_SHELL = [
   './',
   './index.html',
@@ -11,8 +12,25 @@ const APP_SHELL = [
   './icons/icon-maskable.svg'
 ];
 
+function scopeUrl(path) {
+  return new URL(path, self.registration.scope).href;
+}
+
+async function precacheAppShell() {
+  const cache = await caches.open(CACHE_NAME);
+  await Promise.all(APP_SHELL.map(async (path) => {
+    const url = scopeUrl(path);
+    const response = await fetch(new Request(url, { cache: 'reload' }));
+    if (!response.ok) throw new Error(`Precache failed for ${url}: ${response.status}`);
+    await cache.put(url, response);
+  }));
+}
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
+  // Deliberately do not call skipWaiting() here. A newer worker remains in the
+  // waiting state so the app can offer Update now / Later instead of reloading
+  // an active game unexpectedly.
+  event.waitUntil(precacheAppShell());
 });
 
 self.addEventListener('activate', (event) => {
@@ -23,14 +41,31 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+    return;
+  }
+  if (event.data?.type === 'GET_VERSION') {
+    event.ports?.[0]?.postMessage({ version: APP_VERSION });
+  }
+});
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.origin !== self.location.origin) return;
+
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {
       if (!response || response.status !== 200 || response.type === 'opaque') return response;
       const copy = response.clone();
       caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
       return response;
-    }).catch(() => caches.match('./index.html')))
+    }).catch(() => {
+      if (event.request.mode === 'navigate') return caches.match(scopeUrl('./index.html'));
+      return Response.error();
+    }))
   );
 });

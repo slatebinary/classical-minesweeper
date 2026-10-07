@@ -328,6 +328,45 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
 .win-dialog button:active { border-top-color: #000; border-left-color: #000; border-right-color: #fff; border-bottom-color: #fff; }
 .touch-hint { display: none; margin: 0; color: var(--note-text); text-shadow: 1px 1px #000; font-size: 12px; text-align: center; }
 .generation-note { margin: 0; max-width: 620px; text-align: center; color: var(--note-text); text-shadow: 1px 1px #000; font-size: 12px; }
+
+.update-banner {
+  width: min(680px, calc(100vw - 24px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 9px;
+  background: var(--win-gray);
+  color: var(--ui-text);
+  border-top: 2px solid var(--win-light);
+  border-left: 2px solid var(--win-light);
+  border-right: 2px solid var(--win-black);
+  border-bottom: 2px solid var(--win-black);
+  box-shadow: 1px 1px 0 var(--win-dark);
+}
+.update-banner[hidden] { display: none !important; }
+.update-copy { min-width: 0; display: grid; gap: 2px; line-height: 1.25; }
+.update-copy strong { font-size: 13px; }
+.update-copy span { font-size: 11px; }
+.update-actions { flex: 0 0 auto; display: flex; gap: 6px; }
+.update-actions button,
+.update-inline-action {
+  min-height: 30px;
+  padding: 3px 10px;
+  background: var(--win-gray);
+  border-top: 2px solid var(--win-light);
+  border-left: 2px solid var(--win-light);
+  border-right: 2px solid var(--win-black);
+  border-bottom: 2px solid var(--win-black);
+}
+.update-actions button:active,
+.update-inline-action:active {
+  border-top-color: var(--win-black);
+  border-left-color: var(--win-black);
+  border-right-color: var(--win-light);
+  border-bottom-color: var(--win-light);
+}
+.update-inline-wrap { margin-top: 12px; text-align: center; }
 .app-credit {
   margin: -3px 0 0;
   max-width: min(680px, calc(100vw - 24px));
@@ -384,6 +423,8 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
 @media (max-width: 560px) {
   .desktop-shell { place-items: start center; align-content: start; padding-top: max(8px, env(safe-area-inset-top)); }
   .status-panel { gap: 8px; }
+  .update-banner { align-items: stretch; flex-direction: column; gap: 7px; }
+  .update-actions { justify-content: flex-end; flex-wrap: wrap; }
 }
 
 /* Optional dark interpretation of the same classic bevelled interface. */

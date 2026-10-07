@@ -1,10 +1,12 @@
 import { generateCandidate, isLogicallySolvable } from './src/logic.js';
 
-const APP_VERSION = '1.1.5';
+const APP_VERSION = '1.1.6';
 const DEDICATION = 'Dedicated to my daughter Lilly ♥';
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
 const STATS_KEY = 'minesweeper:stats:v1';
+const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+const UPDATE_RECHECK_ON_RESUME_MS = 5 * 60 * 1000;
 
 const PRESETS = {
   beginner: { label: 'Beginner', rows: 9, cols: 9, mines: 10 },
@@ -32,6 +34,11 @@ const helpContent = document.querySelector('#help-content');
 const soundCheck = document.querySelector('#sound-check');
 const tactileCheck = document.querySelector('#tactile-check');
 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+const updateBanner = document.querySelector('#update-banner');
+const updateTitle = document.querySelector('#update-title');
+const updateMessage = document.querySelector('#update-message');
+const updateNowButton = document.querySelector('#update-now');
+const updateLaterButton = document.querySelector('#update-later');
 
 let difficulty = localStorage.getItem('minesweeper:difficulty') || 'beginner';
 if (!PRESETS[difficulty]) difficulty = 'beginner';
@@ -58,6 +65,14 @@ let audioContext = null;
 let touchPress = null;
 let suppressClickUntil = 0;
 let suppressContextMenuUntil = 0;
+let serviceWorkerRegistration = null;
+let waitingUpdateWorker = null;
+let availableUpdateVersion = null;
+let dismissedUpdateVersion = null;
+let updateCheckPromise = null;
+let updateActivationRequested = false;
+let controllerChangeReloading = false;
+let lastUpdateCheckAt = 0;
 
 const supportsWorker = typeof Worker !== 'undefined';
 if (supportsWorker) generatorWorker = new Worker('./generator-worker.js', { type: 'module' });
@@ -931,6 +946,216 @@ async function handleInstallAction() {
   }
 }
 
+async function getServiceWorkerVersion(worker, timeoutMs = 1500) {
+  if (!worker || typeof MessageChannel === 'undefined') return null;
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { channel.port1.close(); } catch {}
+      resolve(typeof value === 'string' && value ? value : null);
+    };
+    const timer = window.setTimeout(() => finish(null), timeoutMs);
+    channel.port1.onmessage = (event) => finish(event.data?.version);
+    try {
+      worker.postMessage({ type: 'GET_VERSION' }, [channel.port2]);
+    } catch {
+      finish(null);
+    }
+  });
+}
+
+function setUpdateBanner(worker, version, force = false) {
+  waitingUpdateWorker = worker || serviceWorkerRegistration?.waiting || null;
+  availableUpdateVersion = version || availableUpdateVersion || null;
+  const dismissKey = availableUpdateVersion || 'new-version';
+  if (!force && dismissedUpdateVersion === dismissKey) return;
+
+  updateTitle.textContent = availableUpdateVersion
+    ? `Minesweeper v${availableUpdateVersion} is available`
+    : 'A Minesweeper update is available';
+  updateMessage.textContent = `You are using v${APP_VERSION}. Update now reloads the app; achievements, best times and settings are preserved.`;
+  updateNowButton.disabled = false;
+  updateNowButton.textContent = 'Update now';
+  updateBanner.hidden = false;
+}
+
+function hideUpdateBanner(dismiss = false) {
+  if (dismiss) dismissedUpdateVersion = availableUpdateVersion || 'new-version';
+  updateBanner.hidden = true;
+}
+
+async function announceWaitingUpdate(worker, force = false) {
+  if (!worker || !navigator.serviceWorker?.controller) return null;
+  const version = await getServiceWorkerVersion(worker);
+  setUpdateBanner(worker, version, force);
+  return { status: 'available', worker, version };
+}
+
+function waitForWorkerInstall(worker, timeoutMs = 12000) {
+  if (!worker) return Promise.resolve();
+  if (['installed', 'activated', 'redundant'].includes(worker.state)) return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      worker.removeEventListener('statechange', onStateChange);
+      resolve();
+    };
+    const onStateChange = () => {
+      if (['installed', 'activated', 'redundant'].includes(worker.state)) finish();
+    };
+    const timer = window.setTimeout(finish, timeoutMs);
+    worker.addEventListener('statechange', onStateChange);
+  });
+}
+
+function watchServiceWorkerRegistration(registration) {
+  registration.addEventListener('updatefound', () => {
+    const worker = registration.installing;
+    if (!worker) return;
+    worker.addEventListener('statechange', async () => {
+      if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+        await announceWaitingUpdate(registration.waiting || worker);
+      }
+    });
+  });
+}
+
+async function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return null;
+  if (serviceWorkerRegistration) return serviceWorkerRegistration;
+
+  try {
+    try {
+      serviceWorkerRegistration = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
+    } catch {
+      serviceWorkerRegistration = await navigator.serviceWorker.register('./sw.js');
+    }
+    watchServiceWorkerRegistration(serviceWorkerRegistration);
+    if (serviceWorkerRegistration.waiting && navigator.serviceWorker.controller) {
+      await announceWaitingUpdate(serviceWorkerRegistration.waiting);
+    }
+    return serviceWorkerRegistration;
+  } catch {
+    return null;
+  }
+}
+
+function showUpdateCheckDialog(state, version = null) {
+  helpTitle.textContent = 'Minesweeper Updates';
+  if (state === 'checking') {
+    helpContent.innerHTML = `<p><strong>Checking for updates…</strong></p><p>Current version: v${APP_VERSION}</p>`;
+  } else if (state === 'available') {
+    const label = version ? `v${version}` : 'a newer version';
+    helpContent.innerHTML = `
+      <p><strong>${label} is ready to install.</strong></p>
+      <p>Current version: v${APP_VERSION}</p>
+      <p>Updating reloads Minesweeper. Your achievements, best times, theme, sound and other local settings are kept.</p>
+      <div class="update-inline-wrap"><button type="button" class="update-inline-action" id="update-now-inline">Update now</button></div>`;
+    document.querySelector('#update-now-inline')?.addEventListener('click', async () => {
+      helpDialog.close();
+      await activateWaitingUpdate();
+    });
+  } else if (state === 'unsupported') {
+    helpContent.innerHTML = `<p>Automatic PWA update checks are not available in this browser.</p><p>Current version: v${APP_VERSION}</p>`;
+  } else if (state === 'error') {
+    helpContent.innerHTML = `<p><strong>Could not check for updates.</strong></p><p>Current version: v${APP_VERSION}</p><p>Check your internet connection and try again later. The installed game remains usable offline.</p>`;
+  } else {
+    helpContent.innerHTML = `<p><strong>Minesweeper is up to date.</strong></p><p>Current version: v${APP_VERSION}</p>`;
+  }
+  if (!helpDialog.open) helpDialog.showModal();
+}
+
+async function checkForUpdates({ manual = false } = {}) {
+  if (manual) showUpdateCheckDialog('checking');
+  if (!('serviceWorker' in navigator)) {
+    if (manual) showUpdateCheckDialog('unsupported');
+    return { status: 'unsupported' };
+  }
+  if (updateCheckPromise) {
+    const result = await updateCheckPromise;
+    if (manual) showUpdateCheckDialog(result.status, result.version);
+    return result;
+  }
+
+  updateCheckPromise = (async () => {
+    const registration = await registerServiceWorker();
+    if (!registration) return { status: 'error' };
+    lastUpdateCheckAt = Date.now();
+
+    if (registration.waiting && navigator.serviceWorker.controller) {
+      const version = await getServiceWorkerVersion(registration.waiting);
+      setUpdateBanner(registration.waiting, version, manual);
+      return { status: 'available', version, worker: registration.waiting };
+    }
+
+    // On a first-ever installation there is no older controlled app to update.
+    if (!navigator.serviceWorker.controller) return { status: 'current', version: APP_VERSION };
+
+    try {
+      await registration.update();
+      if (registration.installing) await waitForWorkerInstall(registration.installing);
+    } catch {
+      return { status: 'error' };
+    }
+
+    const waiting = registration.waiting;
+    if (waiting) {
+      const version = await getServiceWorkerVersion(waiting);
+      setUpdateBanner(waiting, version, manual);
+      return { status: 'available', version, worker: waiting };
+    }
+    return { status: 'current', version: APP_VERSION };
+  })();
+
+  let result;
+  try {
+    result = await updateCheckPromise;
+  } finally {
+    updateCheckPromise = null;
+  }
+  if (manual) showUpdateCheckDialog(result.status, result.version);
+  return result;
+}
+
+async function activateWaitingUpdate() {
+  let worker = waitingUpdateWorker || serviceWorkerRegistration?.waiting || null;
+  if (!worker) {
+    const result = await checkForUpdates({ manual: true });
+    worker = result.worker || serviceWorkerRegistration?.waiting || null;
+    if (!worker) return;
+  }
+
+  if ((status === 'playing' || status === 'generating') && !window.confirm('Update now? The current board will close and Minesweeper will reload. Your statistics and settings will be preserved.')) return;
+
+  updateActivationRequested = true;
+  updateNowButton.disabled = true;
+  updateNowButton.textContent = 'Updating…';
+  updateMessage.textContent = 'Installing the update… Minesweeper will reload automatically.';
+  updateBanner.hidden = false;
+
+  try {
+    worker.postMessage({ type: 'SKIP_WAITING' });
+  } catch {
+    updateNowButton.disabled = false;
+    updateNowButton.textContent = 'Update now';
+    updateMessage.textContent = 'The update could not be activated. Close and reopen the app, then try again.';
+  }
+}
+
+async function initializeUpdateChecks() {
+  const registration = await registerServiceWorker();
+  if (!registration) return;
+  window.setTimeout(() => checkForUpdates().catch(() => {}), 1200);
+  window.setInterval(() => checkForUpdates().catch(() => {}), UPDATE_CHECK_INTERVAL_MS);
+}
+
 function closeMenus() {
   document.querySelectorAll('.menu-popup').forEach((menu) => { menu.hidden = true; });
   document.querySelectorAll('.menu-trigger').forEach((trigger) => trigger.setAttribute('aria-expanded', 'false'));
@@ -985,6 +1210,7 @@ document.querySelector('#help-menu').addEventListener('click', async (event) => 
   if (button.dataset.action === 'how-to-play') showHelp('help');
   else if (button.dataset.action === 'about') showHelp('about');
   else if (button.dataset.action === 'install') await handleInstallAction();
+  else if (button.dataset.action === 'check-updates') await checkForUpdates({ manual: true });
 });
 
 boardEl.addEventListener('click', (event) => {
@@ -1099,6 +1325,9 @@ boardEl.addEventListener('keydown', (event) => {
 
 faceButton.addEventListener('click', () => newGame());
 
+updateNowButton.addEventListener('click', () => activateWaitingUpdate());
+updateLaterButton.addEventListener('click', () => hideUpdateBanner(true));
+
 document.addEventListener('keydown', (event) => {
   if (event.key === 'F2') {
     event.preventDefault();
@@ -1148,7 +1377,18 @@ window.addEventListener('resize', scheduleBoardFit, { passive: true });
 window.addEventListener('orientationchange', scheduleBoardFit, { passive: true });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!updateActivationRequested || controllerChangeReloading) return;
+    controllerChangeReloading = true;
+    window.location.reload();
+  });
+
+  window.addEventListener('load', () => initializeUpdateChecks().catch(() => {}));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - lastUpdateCheckAt < UPDATE_RECHECK_ON_RESUME_MS) return;
+    checkForUpdates().catch(() => {});
+  });
 }
 
 if (systemThemeQuery?.addEventListener) systemThemeQuery.addEventListener('change', handleSystemThemeChange);

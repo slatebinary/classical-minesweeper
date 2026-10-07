@@ -66,6 +66,7 @@
           <div class="menu-popup" id="help-menu" role="menu" hidden>
             <button role="menuitem" data-action="how-to-play"><span>How to Play</span></button>
             <button role="menuitem" data-action="install" id="install-menu-item"><span>Install App...</span></button>
+            <button role="menuitem" data-action="check-updates"><span>Check for Updates...</span></button>
             <div class="menu-separator"></div>
             <button role="menuitem" data-action="about"><span>About Minesweeper...</span></button>
           </div>
@@ -85,9 +86,20 @@
       </div>
     </section>
 
+    <section class="update-banner" id="update-banner" hidden aria-live="polite" aria-label="Application update available">
+      <div class="update-copy">
+        <strong id="update-title">New version available</strong>
+        <span id="update-message">A newer Minesweeper version is ready.</span>
+      </div>
+      <div class="update-actions">
+        <button type="button" id="update-now">Update now</button>
+        <button type="button" id="update-later">Later</button>
+      </div>
+    </section>
+
     <p class="touch-hint" id="touch-hint">Tap to reveal · Hold to flag</p>
     <p class="generation-note" id="generation-note" aria-live="polite">Every board is generated to be solvable by deduction without guessing.</p>
-    <p class="app-credit"><span id="app-version">v1.1.5</span><span class="credit-separator" aria-hidden="true"> · </span><span>Dedicated to my daughter Lilly <span class="dedication-heart" aria-label="heart">♥</span></span></p>
+    <p class="app-credit"><span id="app-version">v1.1.6</span><span class="credit-separator" aria-hidden="true"> · </span><span>Dedicated to my daughter Lilly <span class="dedication-heart" aria-label="heart">♥</span></span></p>
   </main>
 
   <dialog id="best-times-dialog" class="win-dialog">

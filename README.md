@@ -26,7 +26,7 @@ The key difference from ordinary Minesweeper is **no-guess generation**: after y
 - Persistent System, Light, and Dark themes while preserving the classic bevelled interface. System follows the device/OS preference live.
 - Local play statistics, unlockable achievements, and JSON export/import (including iOS Share/Save to Files when available).
 - Local best times for Beginner, Intermediate and Expert.
-- PWA manifest and service worker for installability and offline play.
+- PWA manifest and service worker for installability, offline play, and in-app update detection with Update now / Later controls.
 - Works from a GitHub Pages project subdirectory; no absolute-path assumptions.
 - No framework, package runtime, external CDN, analytics, cookies or server component.
 
@@ -74,7 +74,11 @@ npm run check
 
 ### Updating the PWA
 
-When changing production files, also change `CACHE_NAME` near the top of `sw.js` (for example from `v1.0.0` to `v1.0.1`). This ensures existing installations replace the old offline cache.
+Each release must bump both `APP_VERSION` in `app.js` and `APP_VERSION` in `sw.js` (plus the package/version display). The service worker cache name is derived from that version.
+
+Starting with v1.1.6, an installed copy checks for a newer service worker automatically after launch, every 30 minutes while open, and when the app returns to the foreground after at least five minutes. When an update is found, the app offers **Update now** or **Later**. **Help → Check for Updates...** performs the same check manually. Choosing Update now activates the waiting service worker and reloads the app; local achievements, best times, theme, sound and other settings remain in `localStorage` and are preserved.
+
+The service worker intentionally does not call `skipWaiting()` during installation. This prevents a release from unexpectedly replacing the app in the middle of an active board. The app sends `SKIP_WAITING` only after the player chooses Update now. Because v1.1.5 and earlier did not have this update UI, the first transition to v1.1.6 may still require closing and reopening an older installed copy once; subsequent releases use the in-app flow.
 
 ## Project structure
 
@@ -108,6 +112,15 @@ This project is an original clean-room implementation. It does **not** contain M
 ## License
 
 MIT License. See `LICENSE`.
+
+## v1.1.6
+
+- Adds automatic PWA update checks after launch, every 30 minutes while open, and after returning to the app following a longer background period.
+- Shows an in-app **New version available** notice with **Update now** and **Later**.
+- Adds **Help → Check for Updates...** for an immediate manual check.
+- Update now activates the waiting service worker and reloads the app without requiring a normal Safari browsing step.
+- Preserves achievements, best times, theme, sound and other locally stored preferences across application updates.
+- Changes the service-worker lifecycle so new releases wait for user approval instead of unexpectedly reloading an active game.
 
 ## v1.1.5
 
