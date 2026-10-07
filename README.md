@@ -22,7 +22,7 @@ The key difference from ordinary Minesweeper is **no-guess generation**: after y
 - Double-click a revealed number to chord-open surrounding cells when its flag count matches.
 - F2 or the face button starts a new game.
 - Synthesized reveal, marking, explosion, and win sounds with a persistent Sound on/off option.
-- Optional tactile feedback (ON by default) for field presses, long-press marking, mine hits, and wins on browsers/devices that expose the Vibration API.
+- Optional tactile feedback (ON by default): Android uses the Vibration API when available; iPhone/iOS 18+ uses WebKit's native directly-tapped switch haptic on covered cells.
 - Persistent System, Light, and Dark themes while preserving the classic bevelled interface. System follows the device/OS preference live.
 - Local play statistics, unlockable achievements, and JSON export/import (including iOS Share/Save to Files when available).
 - Local best times for Beginner, Intermediate and Expert.
@@ -112,6 +112,14 @@ This project is an original clean-room implementation. It does **not** contain M
 ## License
 
 MIT License. See `LICENSE`.
+
+## v1.1.7
+
+- Fixes tactile feedback on iPhone/iOS 18+ by using a directly tapped transparent native WebKit `<input type="checkbox" switch>` over covered cells.
+- Android and other supporting browsers continue to use `navigator.vibrate()`.
+- iPhone haptics are limited to the system switch tick; custom vibration patterns are not available to web apps.
+- The iPhone game action is deferred until after the native switch click so repainting a cell cannot cancel the haptic.
+- Tactile feedback remains ON by default and switchable under **Options**.
 
 ## v1.1.6
 

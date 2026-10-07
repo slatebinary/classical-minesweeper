@@ -1,12 +1,22 @@
 import { generateCandidate, isLogicallySolvable } from './src/logic.js';
 
-const APP_VERSION = '1.1.6';
+const APP_VERSION = '1.1.7';
 const DEDICATION = 'Dedicated to my daughter Lilly ♥';
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
 const STATS_KEY = 'minesweeper:stats:v1';
 const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 const UPDATE_RECHECK_ON_RESUME_MS = 5 * 60 * 1000;
+
+// Safari/iOS does not expose navigator.vibrate(). Starting with iOS 18,
+// WebKit gives a native haptic tick when the user directly toggles an
+// <input type="checkbox" switch>. We use a transparent native switch as
+// the actual touch target on covered cells, while Android keeps using the
+// standard Vibration API.
+const IS_IPHONE = /iPhone/i.test(navigator.userAgent);
+const IOS_VERSION_MATCH = navigator.userAgent.match(/OS (\d+)[._]/i);
+const IOS_MAJOR_VERSION = IOS_VERSION_MATCH ? Number(IOS_VERSION_MATCH[1]) : 0;
+const USE_IOS_NATIVE_SWITCH_HAPTICS = IS_IPHONE && IOS_MAJOR_VERSION >= 18 && typeof navigator.vibrate !== 'function';
 
 const PRESETS = {
   beginner: { label: 'Beginner', rows: 9, cols: 9, mines: 10 },
@@ -116,13 +126,50 @@ function setFace(kind = 'normal') {
   if (kind !== 'normal') faceButton.classList.add(kind);
 }
 
+function makeIOSHapticProxy(index) {
+  const proxy = document.createElement('input');
+  proxy.type = 'checkbox';
+  proxy.setAttribute('switch', '');
+  proxy.className = 'ios-haptic-proxy';
+  proxy.dataset.index = String(index);
+  proxy.tabIndex = -1;
+  proxy.setAttribute('aria-hidden', 'true');
+  proxy.setAttribute('autocomplete', 'off');
+
+  // Do not prevent the native click: WebKit's default switch action is what
+  // produces the iPhone Taptic Engine tick. Defer the game reveal until after
+  // that default action, otherwise removing the control too early can suppress
+  // the haptic.
+  proxy.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const pending = proxy.dataset.revealPending;
+    delete proxy.dataset.revealPending;
+    setTimeout(() => {
+      proxy.blur();
+      if (pending !== undefined) revealCell(Number(pending));
+    }, 0);
+  });
+  return proxy;
+}
+
+function syncIOSHapticProxies() {
+  if (!USE_IOS_NATIVE_SWITCH_HAPTICS) return;
+  cells.forEach((cell, index) => {
+    const existing = cell.querySelector('.ios-haptic-proxy');
+    const shouldHaveProxy = tactileEnabled && !revealed[index] && status !== 'won' && status !== 'lost';
+    if (shouldHaveProxy && !existing) cell.appendChild(makeIOSHapticProxy(index));
+    else if (!shouldHaveProxy && existing) existing.remove();
+  });
+}
+
 function makeCell(index) {
-  const cell = document.createElement('button');
-  cell.type = 'button';
+  const cell = document.createElement('div');
   cell.className = 'cell';
   cell.dataset.index = String(index);
+  cell.tabIndex = 0;
   cell.setAttribute('role', 'gridcell');
   cell.setAttribute('aria-label', `Covered cell ${index + 1}`);
+  if (USE_IOS_NATIVE_SWITCH_HAPTICS && tactileEnabled) cell.appendChild(makeIOSHapticProxy(index));
   return cell;
 }
 
@@ -240,8 +287,13 @@ function updateTactileMenu() {
   tactileCheck.textContent = tactileEnabled ? '✓' : '';
   const button = document.querySelector('[data-setting="tactile"]');
   button?.setAttribute('aria-checked', String(tactileEnabled));
-  if (button && typeof navigator.vibrate !== 'function') {
-    button.title = 'Tactile feedback is enabled, but this browser does not expose web vibration/haptics.';
+  if (!button) return;
+  if (USE_IOS_NATIVE_SWITCH_HAPTICS) {
+    button.title = 'On iPhone, covered cells use the native WebKit switch haptic. Android uses device vibration when supported.';
+  } else if (typeof navigator.vibrate === 'function') {
+    button.title = 'Uses device vibration/haptics.';
+  } else {
+    button.title = 'This browser/device does not expose usable web haptics.';
   }
 }
 
@@ -258,6 +310,7 @@ function toggleTactile() {
   tactileEnabled = !tactileEnabled;
   localStorage.setItem('minesweeper:tactile', tactileEnabled ? 'on' : 'off');
   updateTactileMenu();
+  syncIOSHapticProxies();
   if (tactileEnabled) tactile([12, 22, 12]);
   else if (typeof navigator.vibrate === 'function') navigator.vibrate(0);
 }
@@ -853,7 +906,7 @@ function showHelp(kind) {
       <p><strong>Classical Minesweeper PWA</strong> — a clean-room, Windows 95-inspired web implementation.</p>
       <p>Unlike traditional random Minesweeper, every generated field is tested by a deduction solver. If the solver would have to guess, that field is discarded before play begins.</p>
       <p>Version ${APP_VERSION} · ${DEDICATION}</p>
-      <p>Sounds are synthesized in the browser. Tactile feedback uses the browser's vibration/haptics API when available and can be switched off under Options.</p>
+      <p>Sounds are synthesized in the browser. Tactile feedback uses the Vibration API on supported Android browsers. On iPhone with iOS 18 or later, covered cells use WebKit's native switch haptic for a direct-tap Taptic Engine tick. It can be switched off under Options.</p>
       <p>No Microsoft code, artwork, sounds, or game assets are included.</p>`;
   } else {
     helpTitle.textContent = 'How to Play';
@@ -1214,6 +1267,9 @@ document.querySelector('#help-menu').addEventListener('click', async (event) => 
 });
 
 boardEl.addEventListener('click', (event) => {
+  // The transparent iPhone switch handles its own click so WebKit can perform
+  // the native haptic default action before the game changes the cell.
+  if (event.target.closest('.ios-haptic-proxy')) return;
   const cell = event.target.closest('.cell');
   if (!cell) return;
   if (performance.now() < suppressClickUntil) {
@@ -1241,10 +1297,12 @@ boardEl.addEventListener('dblclick', (event) => {
 boardEl.addEventListener('pointerdown', (event) => {
   const cell = event.target.closest('.cell');
   if (!cell || event.button !== 0) return;
+  const iosHapticProxy = event.target.closest('.ios-haptic-proxy');
 
-  // Give an immediate, subtle physical acknowledgement for touch/pen input.
-  // navigator.vibrate() is a no-op on browsers that do not expose haptics.
-  if (event.pointerType !== 'mouse') tactile(10);
+  // Android and other supporting browsers use navigator.vibrate(). On iPhone
+  // the direct native switch tap itself supplies the haptic, so no scripted
+  // vibration is attempted there.
+  if (event.pointerType !== 'mouse' && !iosHapticProxy) tactile(10);
 
   if (cell.classList.contains('revealed')) return;
 
@@ -1254,8 +1312,10 @@ boardEl.addEventListener('pointerdown', (event) => {
 
   if (event.pointerType === 'mouse') return;
 
-  // Prevent iOS/Safari long-press text selection/callouts on nearby UI text.
-  event.preventDefault();
+  // Prevent iOS/Safari long-press text selection/callouts on ordinary cells.
+  // Do NOT preventDefault on the native haptic switch: its WebKit default
+  // action is exactly what produces the Taptic Engine tick.
+  if (!iosHapticProxy) event.preventDefault();
   window.getSelection?.()?.removeAllRanges?.();
 
   cancelTouchPress(false);
@@ -1263,6 +1323,7 @@ boardEl.addEventListener('pointerdown', (event) => {
   const press = {
     pointerId: event.pointerId,
     index,
+    iosHapticProxy,
     startX: event.clientX,
     startY: event.clientY,
     longPressed: false,
@@ -1281,7 +1342,9 @@ boardEl.addEventListener('pointerdown', (event) => {
     if (status !== 'lost' && status !== 'won' && status !== 'generating') setFace('normal');
   }, LONG_PRESS_MS);
   touchPress = press;
-  try { cell.setPointerCapture(event.pointerId); } catch {}
+  if (!iosHapticProxy) {
+    try { cell.setPointerCapture(event.pointerId); } catch {}
+  }
 });
 
 boardEl.addEventListener('pointermove', (event) => {
@@ -1300,7 +1363,15 @@ boardEl.addEventListener('pointerup', (event) => {
   touchPress = null;
   suppressClickUntil = performance.now() + 750;
   suppressContextMenuUntil = performance.now() + 900;
-  if (!press.longPressed) revealCell(press.index);
+  if (!press.longPressed) {
+    if (press.iosHapticProxy?.isConnected) {
+      // Let the native switch click complete first, then reveal from its click
+      // handler so the iPhone haptic is not lost when the cell is repainted.
+      press.iosHapticProxy.dataset.revealPending = String(press.index);
+    } else {
+      revealCell(press.index);
+    }
+  }
   if (status !== 'lost' && status !== 'won' && status !== 'generating') setFace('normal');
 });
 
@@ -1317,9 +1388,13 @@ document.addEventListener('pointerup', () => {
 boardEl.addEventListener('keydown', (event) => {
   const cell = event.target.closest('.cell');
   if (!cell) return;
+  const index = Number(cell.dataset.index);
   if (event.key.toLowerCase() === 'f') {
     event.preventDefault();
-    cycleMark(Number(cell.dataset.index));
+    cycleMark(index);
+  } else if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    revealCell(index);
   }
 });
 
