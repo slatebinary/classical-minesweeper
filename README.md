@@ -22,6 +22,7 @@ The key difference from ordinary Minesweeper is **no-guess generation**: after y
 - Double-click a revealed number to chord-open surrounding cells when its flag count matches.
 - F2 or the face button starts a new game.
 - Synthesized reveal, marking, explosion, and win sounds with a persistent Sound on/off option.
+- Optional tactile feedback (ON by default) for field presses, long-press marking, mine hits, and wins on browsers/devices that expose the Vibration API.
 - Persistent System, Light, and Dark themes while preserving the classic bevelled interface. System follows the device/OS preference live.
 - Local play statistics, unlockable achievements, and JSON export/import (including iOS Share/Save to Files when available).
 - Local best times for Beginner, Intermediate and Expert.
@@ -107,6 +108,21 @@ This project is an original clean-room implementation. It does **not** contain M
 ## License
 
 MIT License. See `LICENSE`.
+
+## v1.1.5
+
+- Expands **Help → Install App...** with device-specific Android instructions.
+- Chrome instructions cover **Install app** and **Add to Home screen** variants.
+- Adds Samsung Internet and Microsoft Edge installation guidance on Android.
+- Keeps the existing iPhone/iPad Safari instructions and desktop-browser fallback.
+
+## v1.1.4
+
+- Adds **Options → Tactile feedback**, enabled by default and remembered between sessions.
+- Touching a field gives a short tactile pulse on supported devices.
+- A successful long-press mark uses a stronger two-pulse pattern; mine hits and wins use distinct patterns.
+- Uses the standard browser Vibration API and safely does nothing on browsers/devices that do not expose haptics.
+- Turning tactile feedback off immediately cancels any active vibration.
 
 ## v1.1.3
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'classical-minesweeper-v1.1.3';
+const CACHE_NAME = 'classical-minesweeper-v1.1.5';
 const APP_SHELL = [
   './',
   './index.html',

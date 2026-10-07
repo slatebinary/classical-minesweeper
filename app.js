@@ -1,6 +1,6 @@
 import { generateCandidate, isLogicallySolvable } from './src/logic.js';
 
-const APP_VERSION = '1.1.3';
+const APP_VERSION = '1.1.5';
 const DEDICATION = 'Dedicated to my daughter Lilly ♥';
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
@@ -30,6 +30,7 @@ const helpDialog = document.querySelector('#help-dialog');
 const helpTitle = document.querySelector('#help-title');
 const helpContent = document.querySelector('#help-content');
 const soundCheck = document.querySelector('#sound-check');
+const tactileCheck = document.querySelector('#tactile-check');
 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
 
 let difficulty = localStorage.getItem('minesweeper:difficulty') || 'beginner';
@@ -49,6 +50,7 @@ let generationRequest = 0;
 let generatorWorker = null;
 let deferredInstallPrompt = null;
 let soundEnabled = localStorage.getItem('minesweeper:sound') !== 'off';
+let tactileEnabled = localStorage.getItem('minesweeper:tactile') !== 'off';
 const systemThemeQuery = window.matchMedia?.('(prefers-color-scheme: dark)') || null;
 let theme = localStorage.getItem('minesweeper:theme') || 'system';
 if (!['system', 'light', 'dark'].includes(theme)) theme = 'system';
@@ -217,6 +219,32 @@ function toggleSound() {
     ensureAudio();
     playTone(660, 0.045, 'square', 0.025);
   }
+}
+
+function updateTactileMenu() {
+  tactileCheck.textContent = tactileEnabled ? '✓' : '';
+  const button = document.querySelector('[data-setting="tactile"]');
+  button?.setAttribute('aria-checked', String(tactileEnabled));
+  if (button && typeof navigator.vibrate !== 'function') {
+    button.title = 'Tactile feedback is enabled, but this browser does not expose web vibration/haptics.';
+  }
+}
+
+function tactile(pattern = 10) {
+  if (!tactileEnabled || typeof navigator.vibrate !== 'function') return false;
+  try {
+    return navigator.vibrate(pattern);
+  } catch {
+    return false;
+  }
+}
+
+function toggleTactile() {
+  tactileEnabled = !tactileEnabled;
+  localStorage.setItem('minesweeper:tactile', tactileEnabled ? 'on' : 'off');
+  updateTactileMenu();
+  if (tactileEnabled) tactile([12, 22, 12]);
+  else if (typeof navigator.vibrate === 'function') navigator.vibrate(0);
 }
 
 function ensureAudio() {
@@ -744,6 +772,7 @@ function lose(explodedIndex) {
   stopTimer();
   setFace('dead');
   playExplosionSound();
+  tactile([35, 30, 75]);
   recordLoss();
   for (let i = 0; i < cells.length; i++) {
     if (board.mines[i] && marks[i] !== 1) {
@@ -780,6 +809,7 @@ function checkWin() {
   saveBestTime();
   recordWin();
   playWinSound();
+  tactile([12, 28, 12, 28, 22]);
   generationNote.textContent = `Solved without guessing in ${elapsedSeconds} second${elapsedSeconds === 1 ? '' : 's'}.`;
 }
 
@@ -808,7 +838,8 @@ function showHelp(kind) {
       <p><strong>Classical Minesweeper PWA</strong> — a clean-room, Windows 95-inspired web implementation.</p>
       <p>Unlike traditional random Minesweeper, every generated field is tested by a deduction solver. If the solver would have to guess, that field is discarded before play begins.</p>
       <p>Version ${APP_VERSION} · ${DEDICATION}</p>
-      <p>Sounds are synthesized in the browser; no Microsoft code, artwork, sounds, or game assets are included.</p>`;
+      <p>Sounds are synthesized in the browser. Tactile feedback uses the browser's vibration/haptics API when available and can be switched off under Options.</p>
+      <p>No Microsoft code, artwork, sounds, or game assets are included.</p>`;
   } else {
     helpTitle.textContent = 'How to Play';
     helpContent.innerHTML = `
@@ -833,6 +864,10 @@ function isIOSDevice() {
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
+function isAndroidDevice() {
+  return /Android/i.test(navigator.userAgent);
+}
+
 function showInstallHelp(message = '') {
   helpTitle.textContent = 'Install Minesweeper';
   const intro = message ? `<p><strong>${message}</strong></p>` : '';
@@ -841,6 +876,7 @@ function showInstallHelp(message = '') {
     helpContent.innerHTML = `${intro}<p>Minesweeper is already running as an installed app.</p>`;
   } else if (isIOSDevice()) {
     helpContent.innerHTML = `${intro}
+      <h3>iPhone / iPad</h3>
       <p>On iPhone and iPad, websites cannot open the PWA installation prompt themselves.</p>
       <ol>
         <li>Open this game in <strong>Safari</strong>.</li>
@@ -849,6 +885,19 @@ function showInstallHelp(message = '') {
         <li>Tap <strong>Add</strong>.</li>
       </ol>
       <p>The Home Screen version then opens as a standalone app and continues to work offline after it has been cached.</p>`;
+  } else if (isAndroidDevice()) {
+    helpContent.innerHTML = `${intro}
+      <h3>Android</h3>
+      <p><strong>Chrome:</strong></p>
+      <ol>
+        <li>Open the deployed Minesweeper site in <strong>Chrome</strong>.</li>
+        <li>Tap the <strong>⋮</strong> menu.</li>
+        <li>Choose <strong>Install app</strong>. On some Chrome versions this appears under <strong>Add to Home screen</strong>.</li>
+        <li>Confirm <strong>Install</strong>.</li>
+      </ol>
+      <p><strong>Samsung Internet:</strong> open the browser menu and choose <strong>Add page to → Home screen</strong>, or use its install shortcut when offered.</p>
+      <p><strong>Edge:</strong> open the browser menu, choose <strong>Add to phone</strong> or <strong>Install app</strong>, then confirm.</p>
+      <p>After installation, launch Minesweeper from the Home screen/app launcher. Once the game has been opened online and cached, it can continue to work offline.</p>`;
   } else {
     helpContent.innerHTML = `${intro}
       <p>If your browser supports direct PWA installation, use the install icon in the address bar or the browser's app/install menu.</p>
@@ -925,6 +974,7 @@ document.querySelector('#options-menu').addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
   if (button.dataset.setting === 'sound') toggleSound();
+  else if (button.dataset.setting === 'tactile') toggleTactile();
   else if (button.dataset.theme) applyTheme(button.dataset.theme);
 });
 
@@ -964,7 +1014,13 @@ boardEl.addEventListener('dblclick', (event) => {
 
 boardEl.addEventListener('pointerdown', (event) => {
   const cell = event.target.closest('.cell');
-  if (!cell || event.button !== 0 || cell.classList.contains('revealed')) return;
+  if (!cell || event.button !== 0) return;
+
+  // Give an immediate, subtle physical acknowledgement for touch/pen input.
+  // navigator.vibrate() is a no-op on browsers that do not expose haptics.
+  if (event.pointerType !== 'mouse') tactile(10);
+
+  if (cell.classList.contains('revealed')) return;
 
   ensureAudio(); // unlock Web Audio while iOS still considers this a user gesture
   cell.classList.add('pressing');
@@ -993,7 +1049,7 @@ boardEl.addEventListener('pointerdown', (event) => {
     cell.classList.remove('pressing');
     cell.classList.add('long-press-active');
     setTimeout(() => cell.classList.remove('long-press-active'), 140);
-    if (cycleMark(index)) navigator.vibrate?.(18);
+    if (cycleMark(index)) tactile([18, 24, 26]);
     suppressClickUntil = performance.now() + 750;
     suppressContextMenuUntil = performance.now() + 900;
     if (status !== 'lost' && status !== 'won' && status !== 'generating') setFace('normal');
@@ -1101,4 +1157,5 @@ else systemThemeQuery?.addListener?.(handleSystemThemeChange);
 document.querySelector('#app-version').textContent = `v${APP_VERSION}`;
 applyTheme(theme, false);
 updateSoundMenu();
+updateTactileMenu();
 newGame();
