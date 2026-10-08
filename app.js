@@ -1,6 +1,6 @@
 import { generateCandidate, isLogicallySolvable } from './src/logic.js';
 
-const APP_VERSION = '1.1.8';
+const APP_VERSION = '1.2.0';
 const DEDICATION = 'Dedicated to my daughter Lilly ♥';
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
@@ -8,15 +8,14 @@ const STATS_KEY = 'minesweeper:stats:v1';
 const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 const UPDATE_RECHECK_ON_RESUME_MS = 5 * 60 * 1000;
 
-// Safari/iOS does not expose navigator.vibrate(). Starting with iOS 18,
-// WebKit gives a native haptic tick when the user directly toggles an
-// <input type="checkbox" switch>. We use a transparent native switch as
-// the actual touch target on covered cells, while Android keeps using the
-// standard Vibration API.
-const IS_IPHONE = /iPhone/i.test(navigator.userAgent);
-const IOS_VERSION_MATCH = navigator.userAgent.match(/OS (\d+)[._]/i);
-const IOS_MAJOR_VERSION = IOS_VERSION_MATCH ? Number(IOS_VERSION_MATCH[1]) : 0;
-const USE_IOS_NATIVE_SWITCH_HAPTICS = IS_IPHONE && IOS_MAJOR_VERSION >= 18 && typeof navigator.vibrate !== 'function';
+// iOS/iPadOS does not expose a general-purpose web vibration API.
+// Safari 18 can haptically tick a real native switch control, but using an
+// invisible switch as a game-cell proxy is intermittent and interferes with
+// gestures. v1.1.9 therefore uses haptics only where the standard Vibration
+// API is actually available, keeping iPhone gameplay deterministic.
+const IS_IOS = /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const TACTILE_SUPPORTED = typeof navigator.vibrate === 'function';
 
 const PRESETS = {
   beginner: { label: 'Beginner', rows: 9, cols: 9, mines: 10 },
@@ -41,6 +40,11 @@ const importAchievementsFile = document.querySelector('#import-achievements-file
 const helpDialog = document.querySelector('#help-dialog');
 const helpTitle = document.querySelector('#help-title');
 const helpContent = document.querySelector('#help-content');
+const shareDialog = document.querySelector('#share-dialog');
+const shareText = document.querySelector('#share-text');
+const shareStatus = document.querySelector('#share-status');
+const nativeShareButton = document.querySelector('#native-share-results');
+const copyShareButton = document.querySelector('#copy-share-results');
 const soundCheck = document.querySelector('#sound-check');
 const tactileCheck = document.querySelector('#tactile-check');
 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
@@ -67,7 +71,8 @@ let generationRequest = 0;
 let generatorWorker = null;
 let deferredInstallPrompt = null;
 let soundEnabled = localStorage.getItem('minesweeper:sound') !== 'off';
-let tactileEnabled = localStorage.getItem('minesweeper:tactile') !== 'off';
+const tactilePreference = localStorage.getItem('minesweeper:tactile') !== 'off';
+let tactileEnabled = TACTILE_SUPPORTED && tactilePreference;
 const systemThemeQuery = window.matchMedia?.('(prefers-color-scheme: dark)') || null;
 let theme = localStorage.getItem('minesweeper:theme') || 'system';
 if (!['system', 'light', 'dark'].includes(theme)) theme = 'system';
@@ -92,6 +97,35 @@ function formatCounter(value) {
   return clamped < 0 ? `-${String(Math.abs(clamped)).padStart(2, '0')}` : String(clamped).padStart(3, '0');
 }
 
+function formatElapsedDisplay(value) {
+  const seconds = Math.max(0, Math.floor(Number(value) || 0));
+  if (seconds <= 999) return String(seconds).padStart(3, '0');
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  if (hours === 0) return `${Math.floor(seconds / 60)}:${String(secs).padStart(2, '0')}`;
+  return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+function formatElapsedHuman(value) {
+  const seconds = Math.max(0, Math.floor(Number(value) || 0));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  if (hours) return `${hours}h ${minutes}m ${secs}s`;
+  if (minutes) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
+}
+
+function renderTimer() {
+  const display = formatElapsedDisplay(elapsedSeconds);
+  timerEl.textContent = display;
+  timerEl.dataset.digits = String(display.length);
+  const label = `Elapsed time ${formatElapsedHuman(elapsedSeconds)}`;
+  timerEl.setAttribute('aria-label', label);
+  timerEl.title = label;
+}
+
 function updateCounter() {
   const remaining = config.mines - flagCount;
   mineCounterEl.textContent = formatCounter(remaining);
@@ -104,8 +138,8 @@ function updateCounter() {
 
 function updateTimer() {
   if (status !== 'playing') return;
-  elapsedSeconds = Math.min(999, Math.floor((Date.now() - startTime) / 1000));
-  timerEl.textContent = formatCounter(elapsedSeconds);
+  elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+  renderTimer();
 }
 
 function stopTimer() {
@@ -117,79 +151,13 @@ function startTimer() {
   stopTimer();
   startTime = Date.now();
   elapsedSeconds = 0;
-  timerEl.textContent = '000';
+  renderTimer();
   timerHandle = setInterval(updateTimer, 250);
 }
 
 function setFace(kind = 'normal') {
   faceButton.classList.remove('surprised', 'dead', 'cool');
   if (kind !== 'normal') faceButton.classList.add(kind);
-}
-
-let iosHapticActionSequence = 0;
-
-function completeIOSHapticAction(proxy, actionId) {
-  if (!proxy || proxy.dataset.pendingActionId !== actionId) return;
-  const action = proxy.dataset.pendingAction;
-  const index = Number(proxy.dataset.index);
-  delete proxy.dataset.pendingAction;
-  delete proxy.dataset.pendingActionId;
-  if (proxy._actionFallbackTimer) {
-    clearTimeout(proxy._actionFallbackTimer);
-    proxy._actionFallbackTimer = 0;
-  }
-  proxy.blur();
-  if (action === 'reveal') revealCell(index);
-  else if (action === 'mark') cycleMark(index);
-}
-
-function queueIOSHapticAction(proxy, action) {
-  if (!proxy?.isConnected) return false;
-  const actionId = String(++iosHapticActionSequence);
-  proxy.dataset.pendingAction = action;
-  proxy.dataset.pendingActionId = actionId;
-  if (proxy._actionFallbackTimer) clearTimeout(proxy._actionFallbackTimer);
-
-  // WebKit normally dispatches a synthetic click when the finger is released.
-  // iOS 18 has known intermittent click/touch delivery issues, so keep a small
-  // fallback to make sure the game action still happens even if that click is
-  // lost. The fallback cannot manufacture haptics; it only preserves gameplay.
-  proxy._actionFallbackTimer = window.setTimeout(() => {
-    completeIOSHapticAction(proxy, actionId);
-  }, 220);
-  return true;
-}
-
-function makeIOSHapticProxy(index) {
-  const proxy = document.createElement('input');
-  proxy.type = 'checkbox';
-  proxy.setAttribute('switch', '');
-  proxy.className = 'ios-haptic-proxy';
-  proxy.dataset.index = String(index);
-  proxy.tabIndex = -1;
-  proxy.setAttribute('aria-hidden', 'true');
-  proxy.setAttribute('autocomplete', 'off');
-
-  // The native switch must finish its own direct-touch default action before we
-  // reveal/mark the Minesweeper cell. This is particularly important for a long
-  // press: mutating the cell while WebKit is still tracking the switch can make
-  // its haptic feedback intermittent.
-  proxy.addEventListener('click', (event) => {
-    event.stopPropagation();
-    const actionId = proxy.dataset.pendingActionId;
-    if (actionId) setTimeout(() => completeIOSHapticAction(proxy, actionId), 0);
-  });
-  return proxy;
-}
-
-function syncIOSHapticProxies() {
-  if (!USE_IOS_NATIVE_SWITCH_HAPTICS) return;
-  cells.forEach((cell, index) => {
-    const existing = cell.querySelector('.ios-haptic-proxy');
-    const shouldHaveProxy = tactileEnabled && !revealed[index] && status !== 'won' && status !== 'lost';
-    if (shouldHaveProxy && !existing) cell.appendChild(makeIOSHapticProxy(index));
-    else if (!shouldHaveProxy && existing) existing.remove();
-  });
 }
 
 function makeCell(index) {
@@ -199,7 +167,6 @@ function makeCell(index) {
   cell.tabIndex = 0;
   cell.setAttribute('role', 'gridcell');
   cell.setAttribute('aria-label', `Covered cell ${index + 1}`);
-  if (USE_IOS_NATIVE_SWITCH_HAPTICS && tactileEnabled) cell.appendChild(makeIOSHapticProxy(index));
   return cell;
 }
 
@@ -314,21 +281,33 @@ function toggleSound() {
 }
 
 function updateTactileMenu() {
-  tactileCheck.textContent = tactileEnabled ? '✓' : '';
   const button = document.querySelector('[data-setting="tactile"]');
+  const label = button?.querySelector('.setting-label');
+  tactileCheck.textContent = tactileEnabled ? '✓' : '';
   button?.setAttribute('aria-checked', String(tactileEnabled));
   if (!button) return;
-  if (USE_IOS_NATIVE_SWITCH_HAPTICS) {
-    button.title = 'Android uses device vibration when supported. iPhone uses a best-effort native WebKit switch haptic, which iOS may not deliver on every gesture.';
-  } else if (typeof navigator.vibrate === 'function') {
-    button.title = 'Uses device vibration/haptics.';
-  } else {
-    button.title = 'This browser/device does not expose usable web haptics.';
+
+  if (!TACTILE_SUPPORTED) {
+    button.disabled = true;
+    button.setAttribute('aria-disabled', 'true');
+    if (IS_IOS) {
+      if (label) label.textContent = 'Tactile feedback (iPhone unavailable)';
+      button.title = 'iPhone/iPad web apps do not expose a reliable programmable haptics API. The previous native-switch workaround was removed because it was intermittent.';
+    } else {
+      if (label) label.textContent = 'Tactile feedback (unavailable)';
+      button.title = 'This browser/device does not expose the Vibration API.';
+    }
+    return;
   }
+
+  button.disabled = false;
+  button.removeAttribute('aria-disabled');
+  if (label) label.textContent = 'Tactile feedback';
+  button.title = 'Uses the device Vibration API. Enabled by default on supported devices.';
 }
 
 function tactile(pattern = 10) {
-  if (!tactileEnabled || typeof navigator.vibrate !== 'function') return false;
+  if (!tactileEnabled || !TACTILE_SUPPORTED) return false;
   try {
     return navigator.vibrate(pattern);
   } catch {
@@ -337,12 +316,12 @@ function tactile(pattern = 10) {
 }
 
 function toggleTactile() {
+  if (!TACTILE_SUPPORTED) return;
   tactileEnabled = !tactileEnabled;
   localStorage.setItem('minesweeper:tactile', tactileEnabled ? 'on' : 'off');
   updateTactileMenu();
-  syncIOSHapticProxies();
   if (tactileEnabled) tactile([12, 22, 12]);
-  else if (typeof navigator.vibrate === 'function') navigator.vibrate(0);
+  else navigator.vibrate(0);
 }
 
 function ensureAudio() {
@@ -492,8 +471,13 @@ function recordWin() {
 function bestTimesObject() {
   const out = {};
   for (const key of Object.keys(PRESETS)) {
-    const value = Number(localStorage.getItem(`minesweeper:best:${key}`));
-    out[key] = value || null;
+    const raw = localStorage.getItem(`minesweeper:best:${key}`);
+    if (raw === null) {
+      out[key] = null;
+      continue;
+    }
+    const value = Number(raw);
+    out[key] = Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
   }
   return out;
 }
@@ -597,7 +581,7 @@ function normalizeImportedBestTimes(raw) {
       continue;
     }
     const number = Number(value);
-    if (!Number.isFinite(number) || number < 0 || number > 999) throw new Error(`Invalid ${PRESETS[key].label} best time.`);
+    if (!Number.isSafeInteger(number) || number < 0) throw new Error(`Invalid ${PRESETS[key].label} best time.`);
     best[key] = Math.floor(number);
   }
   return best;
@@ -693,7 +677,7 @@ function newGame(nextDifficulty = difficulty) {
   flagCount = 0;
   elapsedSeconds = 0;
   status = 'ready';
-  timerEl.textContent = '000';
+  renderTimer();
   updateCounter();
   setFace('normal');
   generationNote.textContent = 'Every board is generated to be solvable by deduction without guessing.';
@@ -864,8 +848,8 @@ function chord(index) {
 }
 
 function lose(explodedIndex) {
-  elapsedSeconds = Math.min(999, Math.floor((Date.now() - startTime) / 1000));
-  timerEl.textContent = formatCounter(elapsedSeconds);
+  elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+  renderTimer();
   status = 'lost';
   stopTimer();
   setFace('dead');
@@ -891,8 +875,8 @@ function lose(explodedIndex) {
 
 function checkWin() {
   if (status !== 'playing' || openedSafe !== config.rows * config.cols - config.mines) return;
-  elapsedSeconds = Math.min(999, Math.floor((Date.now() - startTime) / 1000));
-  timerEl.textContent = formatCounter(elapsedSeconds);
+  elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+  renderTimer();
   status = 'won';
   stopTimer();
   setFace('cool');
@@ -908,7 +892,7 @@ function checkWin() {
   recordWin();
   playWinSound();
   tactile([12, 28, 12, 28, 22]);
-  generationNote.textContent = `Solved without guessing in ${elapsedSeconds} second${elapsedSeconds === 1 ? '' : 's'}.`;
+  generationNote.textContent = `Solved without guessing in ${formatElapsedHuman(elapsedSeconds)}.`;
 }
 
 function saveBestTime() {
@@ -918,15 +902,85 @@ function saveBestTime() {
 }
 
 function renderBestTimes() {
+  const best = bestTimesObject();
   for (const key of Object.keys(PRESETS)) {
-    const value = Number(localStorage.getItem(`minesweeper:best:${key}`));
-    document.querySelector(`#best-${key}`).textContent = value ? `${value} seconds` : '---';
+    const value = best[key];
+    document.querySelector(`#best-${key}`).textContent = value === null ? '---' : formatElapsedHuman(value);
   }
 }
 
 function showBestTimes() {
   renderBestTimes();
   bestTimesDialog.showModal();
+}
+
+function buildSharePayload() {
+  const stats = loadStats();
+  const best = bestTimesObject();
+  const achievements = getAchievements(stats, best);
+  const earned = achievements.filter((item) => item.earned).length;
+  const wins = Object.values(stats.wins).reduce((sum, value) => sum + value, 0);
+  const losses = Object.values(stats.losses).reduce((sum, value) => sum + value, 0);
+  const completed = wins + losses;
+  const started = Object.values(stats.gamesStarted).reduce((sum, value) => sum + value, 0);
+  const winRate = completed ? Math.round((wins / completed) * 100) : 0;
+  const bestLine = Object.keys(PRESETS)
+    .map((key) => `${PRESETS[key].label}: ${best[key] === null ? '—' : formatElapsedHuman(best[key])}`)
+    .join(' · ');
+
+  const lines = ['Classical Minesweeper — no-guess boards'];
+  if (status === 'won') lines.push(`Just cleared ${config.label} in ${formatElapsedHuman(elapsedSeconds)}.`);
+  lines.push(`Games started: ${started} · Completed: ${completed} · Wins: ${wins} (${winRate}%)`);
+  lines.push(`Best streak: ${stats.bestWinStreak} · Achievements: ${earned}/${achievements.length}`);
+  lines.push(`Best times — ${bestLine}`);
+
+  const url = new URL('./', window.location.href).href;
+  return {
+    title: 'Classical Minesweeper',
+    text: lines.join('\n'),
+    url,
+    fullText: `${lines.join('\n')}\n${url}`
+  };
+}
+
+function refreshShareDialog() {
+  const payload = buildSharePayload();
+  shareText.value = payload.fullText;
+  shareStatus.textContent = '';
+  nativeShareButton.hidden = typeof navigator.share !== 'function';
+  return payload;
+}
+
+function showShareDialog() {
+  refreshShareDialog();
+  shareDialog.showModal();
+}
+
+async function shareResults() {
+  const payload = buildSharePayload();
+  if (typeof navigator.share !== 'function') {
+    showShareDialog();
+    shareStatus.textContent = 'Native sharing is not available here. Use Copy instead.';
+    return;
+  }
+  try {
+    await navigator.share({ title: payload.title, text: payload.text, url: payload.url });
+    shareStatus.textContent = 'Shared.';
+  } catch (error) {
+    if (error?.name !== 'AbortError') shareStatus.textContent = 'Sharing could not be opened. You can copy the text instead.';
+  }
+}
+
+async function copyShareResults() {
+  const payload = buildSharePayload();
+  try {
+    await navigator.clipboard.writeText(payload.fullText);
+    shareStatus.textContent = 'Copied to clipboard.';
+  } catch {
+    shareText.focus();
+    shareText.select();
+    shareStatus.textContent = 'Select and copy the highlighted text.';
+  }
 }
 
 function showHelp(kind) {
@@ -936,7 +990,8 @@ function showHelp(kind) {
       <p><strong>Classical Minesweeper PWA</strong> — a clean-room, Windows 95-inspired web implementation.</p>
       <p>Unlike traditional random Minesweeper, every generated field is tested by a deduction solver. If the solver would have to guess, that field is discarded before play begins.</p>
       <p>Version ${APP_VERSION} · ${DEDICATION}</p>
-      <p>Sounds are synthesized in the browser. Tactile feedback uses the Vibration API on supported Android browsers. On iPhone with iOS 18 or later, covered cells use a best-effort WebKit native-switch haptic. iOS does not provide a general web haptics API, so a tick cannot be guaranteed on every gesture. It can be switched off under Options.</p>
+      <p>The original three-digit Minesweeper clock stopped at 999 seconds. This version preserves the classic 000–999 display, then continues with minutes and seconds so longer games are timed accurately.</p>
+      <p>Sounds are synthesized in the browser. Tactile feedback uses the standard Vibration API on supported devices and is enabled by default there. On iPhone/iPad, web apps do not expose a reliable programmable haptics API, so tactile feedback is shown as unavailable rather than using the previous intermittent native-switch workaround.</p>
       <p>No Microsoft code, artwork, sounds, or game assets are included.</p>`;
   } else {
     helpTitle.textContent = 'How to Play';
@@ -1294,12 +1349,10 @@ document.querySelector('#help-menu').addEventListener('click', async (event) => 
   else if (button.dataset.action === 'about') showHelp('about');
   else if (button.dataset.action === 'install') await handleInstallAction();
   else if (button.dataset.action === 'check-updates') await checkForUpdates({ manual: true });
+  else if (button.dataset.action === 'share') showShareDialog();
 });
 
 boardEl.addEventListener('click', (event) => {
-  // The transparent iPhone switch handles its own click so WebKit can perform
-  // the native haptic default action before the game changes the cell.
-  if (event.target.closest('.ios-haptic-proxy')) return;
   const cell = event.target.closest('.cell');
   if (!cell) return;
   if (performance.now() < suppressClickUntil) {
@@ -1327,12 +1380,9 @@ boardEl.addEventListener('dblclick', (event) => {
 boardEl.addEventListener('pointerdown', (event) => {
   const cell = event.target.closest('.cell');
   if (!cell || event.button !== 0) return;
-  const iosHapticProxy = event.target.closest('.ios-haptic-proxy');
-
-  // Android and other supporting browsers use navigator.vibrate(). On iPhone
-  // the direct native switch tap itself supplies the haptic, so no scripted
-  // vibration is attempted there.
-  if (event.pointerType !== 'mouse' && !iosHapticProxy) tactile(10);
+  // Give an immediate, subtle physical acknowledgement where the browser
+  // exposes the standard Vibration API. This is a no-op on iPhone/iPad.
+  if (event.pointerType !== 'mouse') tactile(10);
 
   if (cell.classList.contains('revealed')) return;
 
@@ -1342,10 +1392,8 @@ boardEl.addEventListener('pointerdown', (event) => {
 
   if (event.pointerType === 'mouse') return;
 
-  // Prevent iOS/Safari long-press text selection/callouts on ordinary cells.
-  // Do NOT preventDefault on the native haptic switch: its WebKit default
-  // action is exactly what produces the Taptic Engine tick.
-  if (!iosHapticProxy) event.preventDefault();
+  // Prevent iOS/Safari long-press text selection/callouts on the board.
+  event.preventDefault();
   window.getSelection?.()?.removeAllRanges?.();
 
   cancelTouchPress(false);
@@ -1353,7 +1401,6 @@ boardEl.addEventListener('pointerdown', (event) => {
   const press = {
     pointerId: event.pointerId,
     index,
-    iosHapticProxy,
     startX: event.clientX,
     startY: event.clientY,
     longPressed: false,
@@ -1367,22 +1414,14 @@ boardEl.addEventListener('pointerdown', (event) => {
     cell.classList.add('long-press-active');
     setTimeout(() => cell.classList.remove('long-press-active'), 140);
 
-    if (press.iosHapticProxy) {
-      // Do not change the cell yet. iOS/WebKit's switch has its own long-hold
-      // tracking. Let the finger release, allow the native switch to toggle and
-      // produce its haptic tick, and only then apply the flag/question action.
-    } else if (cycleMark(index)) {
-      tactile([18, 24, 26]);
-    }
+    if (cycleMark(index)) tactile([18, 24, 26]);
 
     suppressClickUntil = performance.now() + 750;
     suppressContextMenuUntil = performance.now() + 900;
     if (status !== 'lost' && status !== 'won' && status !== 'generating') setFace('normal');
   }, LONG_PRESS_MS);
   touchPress = press;
-  if (!iosHapticProxy) {
-    try { cell.setPointerCapture(event.pointerId); } catch {}
-  }
+  try { cell.setPointerCapture(event.pointerId); } catch {}
 });
 
 boardEl.addEventListener('pointermove', (event) => {
@@ -1401,13 +1440,7 @@ boardEl.addEventListener('pointerup', (event) => {
   touchPress = null;
   suppressClickUntil = performance.now() + 750;
   suppressContextMenuUntil = performance.now() + 900;
-  if (press.iosHapticProxy?.isConnected) {
-    // Both a short reveal and a long-press mark are deferred until after the
-    // native switch click. This avoids fighting WebKit's switch gesture state.
-    queueIOSHapticAction(press.iosHapticProxy, press.longPressed ? 'mark' : 'reveal');
-  } else if (!press.longPressed) {
-    revealCell(press.index);
-  }
+  if (!press.longPressed) revealCell(press.index);
   if (status !== 'lost' && status !== 'won' && status !== 'generating') setFace('normal');
 });
 
@@ -1454,6 +1487,9 @@ document.querySelector('#reset-times').addEventListener('click', () => {
 });
 
 document.querySelector('#export-achievements').addEventListener('click', () => exportAchievements());
+document.querySelector('#share-achievements').addEventListener('click', () => { achievementsDialog.close(); showShareDialog(); });
+nativeShareButton.addEventListener('click', () => shareResults());
+copyShareButton.addEventListener('click', () => copyShareResults());
 document.querySelector('#import-achievements').addEventListener('click', () => {
   importAchievementsFile.value = '';
   importAchievementsFile.click();

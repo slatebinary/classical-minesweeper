@@ -22,10 +22,11 @@ The key difference from ordinary Minesweeper is **no-guess generation**: after y
 - Double-click a revealed number to chord-open surrounding cells when its flag count matches.
 - F2 or the face button starts a new game.
 - Synthesized reveal, marking, explosion, and win sounds with a persistent Sound on/off option.
-- Optional tactile feedback (ON by default): Android uses the Vibration API when available; iPhone/iOS 18+ uses WebKit's native directly-tapped switch haptic on covered cells.
+- Optional tactile feedback (ON by default) on browsers/devices exposing the standard Vibration API, including supported Android browsers. iPhone/iPad currently shows the option as unavailable because iOS PWAs do not expose reliable programmable haptics.
 - Persistent System, Light, and Dark themes while preserving the classic bevelled interface. System follows the device/OS preference live.
 - Local play statistics, unlockable achievements, and JSON export/import (including iOS Share/Save to Files when available).
-- Local best times for Beginner, Intermediate and Expert.
+- Local best times for Beginner, Intermediate and Expert. The classic clock remains 000–999 for the first 999 seconds, then continues as minutes/seconds (and hours if needed) rather than stopping.
+- Shareable statistics summary with native mobile sharing when available and a copy-to-clipboard fallback.
 - PWA manifest and service worker for installability, offline play, and in-app update detection with Update now / Later controls.
 - Works from a GitHub Pages project subdirectory; no absolute-path assumptions.
 - No framework, package runtime, external CDN, analytics, cookies or server component.
@@ -112,6 +113,24 @@ This project is an original clean-room implementation. It does **not** contain M
 ## License
 
 MIT License. See `LICENSE`.
+
+## v1.2.0
+
+- Extends the timer beyond the original 999-second ceiling while preserving the classic 000–999 presentation for the first 16m 39s.
+- After 999 seconds the timer changes to `MM:SS`, and to `H:MM:SS` for games lasting an hour or more.
+- Best times, win messages, JSON import, and accessibility labels now support times beyond 999 seconds.
+- Adds **Help → Share Results...** plus a **Share Results** button in Achievements.
+- The share summary includes games started/completed, wins and win rate, best streak, achievements earned, and best times for all three difficulties; a just-completed win is included when applicable.
+- Uses the native iOS/Android share sheet where supported, with Copy/selectable-text fallback elsewhere.
+- Corrects the README description of iPhone tactile support to match v1.1.9 behaviour.
+
+## v1.1.9
+
+- Removes the experimental hidden-native-switch haptic workaround on iPhone/iPad after real-device testing showed intermittent feedback.
+- Keeps tactile feedback ON by default on browsers/devices that expose the standard Vibration API (for example, supported Android browsers).
+- On iPhone/iPad, **Options → Tactile feedback** is now visibly disabled and labelled unavailable instead of pretending to offer reliable haptics.
+- Restores the normal deterministic short-tap/long-press touch path on iOS, avoiding hidden controls that could interfere with gestures.
+- Keeps visual pressed-state and optional sound feedback on iPhone/iPad.
 
 ## v1.1.8
 

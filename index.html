@@ -54,7 +54,7 @@
           <button class="menu-trigger" id="options-menu-button" aria-haspopup="true" aria-expanded="false"><u>O</u>ptions</button>
           <div class="menu-popup" id="options-menu" role="menu" hidden>
             <button role="menuitemcheckbox" data-setting="sound" aria-checked="true"><span class="check-slot" id="sound-check">✓</span><span>Sound</span></button>
-            <button role="menuitemcheckbox" data-setting="tactile" aria-checked="true" title="Uses Android vibration or the native iPhone WebKit switch haptic when supported"><span class="check-slot" id="tactile-check">✓</span><span>Tactile feedback</span></button>
+            <button role="menuitemcheckbox" data-setting="tactile" aria-checked="true" title="Uses device vibration when the browser supports it"><span class="check-slot" id="tactile-check">✓</span><span class="setting-label">Tactile feedback</span></button>
             <div class="menu-separator"></div>
             <button role="menuitemradio" data-theme="system" aria-checked="true"><span class="check-slot">✓</span><span>System theme</span></button>
             <button role="menuitemradio" data-theme="light" aria-checked="false"><span class="check-slot"></span><span>Light theme</span></button>
@@ -67,6 +67,7 @@
             <button role="menuitem" data-action="how-to-play"><span>How to Play</span></button>
             <button role="menuitem" data-action="install" id="install-menu-item"><span>Install App...</span></button>
             <button role="menuitem" data-action="check-updates"><span>Check for Updates...</span></button>
+            <button role="menuitem" data-action="share"><span>Share Results...</span></button>
             <div class="menu-separator"></div>
             <button role="menuitem" data-action="about"><span>About Minesweeper...</span></button>
           </div>
@@ -99,7 +100,7 @@
 
     <p class="touch-hint" id="touch-hint">Tap to reveal · Hold to flag</p>
     <p class="generation-note" id="generation-note" aria-live="polite">Every board is generated to be solvable by deduction without guessing.</p>
-    <p class="app-credit"><span id="app-version">v1.1.8</span><span class="credit-separator" aria-hidden="true"> · </span><span>Dedicated to my daughter Lilly <span class="dedication-heart" aria-label="heart">♥</span></span></p>
+    <p class="app-credit"><span id="app-version">v1.2.0</span><span class="credit-separator" aria-hidden="true"> · </span><span>Dedicated to my daughter Lilly <span class="dedication-heart" aria-label="heart">♥</span></span></p>
   </main>
 
   <dialog id="best-times-dialog" class="win-dialog">
@@ -128,6 +129,7 @@
         <div class="stats-summary" id="stats-summary"></div>
         <ul class="achievement-list" id="achievement-list"></ul>
         <div class="dialog-buttons wrap-buttons">
+          <button type="button" id="share-achievements">Share Results</button>
           <button type="button" id="export-achievements">Export JSON</button>
           <button type="button" id="import-achievements">Import JSON</button>
           <input type="file" id="import-achievements-file" accept="application/json,.json" hidden>
@@ -143,6 +145,22 @@
       <div class="dialog-title" id="help-title">Minesweeper Help</div>
       <div class="dialog-body" id="help-content"></div>
       <div class="dialog-buttons"><button value="close">OK</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="share-dialog" class="win-dialog wide-dialog">
+    <form method="dialog">
+      <div class="dialog-title">Share Minesweeper Results</div>
+      <div class="dialog-body">
+        <p class="share-intro">Share a compact summary of your local Minesweeper statistics and best times.</p>
+        <textarea id="share-text" class="share-text" rows="8" readonly aria-label="Shareable Minesweeper statistics"></textarea>
+        <p id="share-status" class="share-status" aria-live="polite"></p>
+        <div class="dialog-buttons wrap-buttons">
+          <button type="button" id="native-share-results">Share...</button>
+          <button type="button" id="copy-share-results">Copy</button>
+          <button value="close">Close</button>
+        </div>
+      </div>
     </form>
   </dialog>
 
