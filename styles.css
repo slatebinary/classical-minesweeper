@@ -343,10 +343,12 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
   position: absolute;
   z-index: 12;
   pointer-events: none;
-  border: max(2px, calc(var(--cell-size) * .12)) solid #fff;
-  outline: max(1px, calc(var(--cell-size) * .07)) solid #000;
-  outline-offset: calc(max(1px, calc(var(--cell-size) * .07)) * -1);
-  box-shadow: 0 0 0 1px #000;
+  border: max(2px, calc(var(--cell-size) * .09)) solid #fff;
+  outline: 1px solid #000;
+  outline-offset: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .45);
+  background: rgba(255, 255, 255, .08);
+  border-radius: 2px;
 }
 .precision-crosshair::before,
 .precision-crosshair::after {
@@ -358,8 +360,8 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
   box-shadow: 0 0 0 1px #000;
   transform: translate(-50%, -50%);
 }
-.precision-crosshair::before { width: 34%; height: 2px; }
-.precision-crosshair::after { width: 2px; height: 34%; }
+.precision-crosshair::before { width: 42%; height: 2px; }
+.precision-crosshair::after { width: 2px; height: 42%; }
 .precision-crosshair[hidden] { display: none !important; }
 
 .precision-panel {
@@ -375,6 +377,7 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
   background: var(--win-gray);
 }
 .precision-panel[hidden] { display: none !important; }
+.precision-layout { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
 .precision-preview-wrap { display: grid; justify-items: center; gap: 4px; min-width: 0; }
 .precision-preview {
   display: grid;
@@ -410,6 +413,24 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
   text-align: center;
   line-height: 1.25;
 }
+.precision-nav-wrap { display: grid; justify-items: center; gap: 4px; min-width: 0; }
+.precision-nav-label { font-size: 11px; line-height: 1.2; text-align: center; }
+.precision-nav { display: grid; grid-template-columns: repeat(3, minmax(44px, 56px)); grid-template-rows: repeat(3, minmax(44px, 56px)); gap: 5px; align-items: stretch; justify-items: stretch; }
+.precision-nav-gap { display: block; }
+.precision-nav-center { display: grid; place-items: center; font-size: 20px; color: var(--win-dark); text-shadow: 1px 1px var(--win-light); user-select: none; }
+.precision-nav button,
+.precision-actions button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px 7px;
+  font-weight: 700;
+  background: var(--win-gray);
+  border-top: 2px solid var(--win-light);
+  border-left: 2px solid var(--win-light);
+  border-right: 2px solid var(--win-black);
+  border-bottom: 2px solid var(--win-black);
+}
+.precision-nav button { font-size: 22px; line-height: 1; }
 .precision-actions {
   width: 100%;
   display: grid;
@@ -427,12 +448,14 @@ button:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
   border-right: 2px solid var(--win-black);
   border-bottom: 2px solid var(--win-black);
 }
+.precision-nav button:active:not(:disabled),
 .precision-actions button:active:not(:disabled) {
   border-top-color: var(--win-black);
   border-left-color: var(--win-black);
   border-right-color: var(--win-light);
   border-bottom-color: var(--win-light);
 }
+.precision-nav button:disabled,
 .precision-actions button:disabled { opacity: .55; }
 .board-frame.precision-mode,
 .board-frame.precision-active { touch-action: none; }
@@ -608,6 +631,14 @@ html[data-theme="dark"] button:focus-visible { outline-color: #fff; }
 
 html[data-theme="dark"] .precision-panel { border-top-color: #181818; border-left-color: #181818; border-right-color: #777; border-bottom-color: #777; }
 html[data-theme="dark"] .precision-actions button { border-top-color: #777; border-left-color: #777; border-right-color: #111; border-bottom-color: #111; }
-html[data-theme="dark"] .precision-actions button:active:not(:disabled) { border-top-color: #111; border-left-color: #111; border-right-color: #777; border-bottom-color: #777; }
+html[data-theme="dark"] .precision-nav button:active:not(:disabled),
+.precision-actions button:active:not(:disabled) { border-top-color: #111; border-left-color: #111; border-right-color: #777; border-bottom-color: #777; }
 
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+
+@media (max-width: 420px) {
+  .precision-layout { grid-template-columns: 1fr; }
+  .precision-nav { grid-template-columns: repeat(3, minmax(48px, 1fr)); justify-self: stretch; }
+  .precision-nav-wrap { width: 100%; }
+}

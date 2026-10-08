@@ -19,7 +19,7 @@ The key difference from ordinary Minesweeper is **no-guess generation**: after y
 - Guaranteed no-guess boards for all built-in difficulty levels.
 - Mouse: left-click reveal; right-click cycles flag → question mark → clear.
 - Touch Direct mode: short tap reveals; press-and-hold cycles flag → question mark → clear.
-- Optional Precision touch mode for small screens: tap/drag a persistent crosshair to select a tile, inspect a magnified 3×3 preview, then use large Reveal / Flag controls. Two-finger pinch/drag zooms and pans the board up to 3×; Fit resets to the whole-board view.
+- Optional Precision touch mode for small screens: use large arrow buttons or tap/drag to move a gentler crosshair, inspect a live magnified 3×3 preview that follows the selection, then use large Reveal / Flag controls. Two-finger pinch/drag zooms and pans the board up to 3×; Fit resets to the whole-board view.
 - Double-click a revealed number to chord-open surrounding cells when its flag count matches.
 - F2 or the face button starts a new game.
 - Synthesized reveal, marking, explosion, and win sounds with a persistent Sound on/off option.
@@ -114,6 +114,13 @@ This project is an original clean-room implementation. It does **not** contain M
 ## License
 
 MIT License. See `LICENSE`.
+
+## v1.2.2
+
+- Adds large directional arrow buttons in Precision touch mode so the crosshair can be moved one tile at a time without repeatedly tapping the minefield.
+- The 3×3 magnified preview now explicitly follows the currently selected tile as the crosshair moves by buttons, keyboard, or touch drag.
+- Redesigns the Precision crosshair to be less heavy inside a tile, making the underlying cell easier to perceive.
+- Automatically starts Precision mode with a sensible selected tile so the arrow controls are immediately usable after switching modes or starting a new board.
 
 ## v1.2.1
 

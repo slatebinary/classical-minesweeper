@@ -1,6 +1,6 @@
 import { generateCandidate, isLogicallySolvable } from './src/logic.js';
 
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.2.2';
 const DEDICATION = 'Dedicated to my daughter Lilly ♥';
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
@@ -59,6 +59,7 @@ const precisionSelectionStatus = document.querySelector('#precision-selection-st
 const precisionRevealButton = document.querySelector('#precision-reveal');
 const precisionFlagButton = document.querySelector('#precision-flag');
 const precisionFitButton = document.querySelector('#precision-fit');
+const precisionMoveButtons = [...document.querySelectorAll('[data-precision-move]')];
 const touchHint = document.querySelector('#touch-hint');
 
 let difficulty = localStorage.getItem('minesweeper:difficulty') || 'beginner';
@@ -255,6 +256,9 @@ function renderBoard() {
   precisionCrosshairEl.hidden = true;
   boardEl.appendChild(precisionCrosshairEl);
   fitBoardToViewport();
+  if (isPrecisionMode() && cells.length && precisionSelectedIndex === null) {
+    precisionSelectedIndex = precisionCenterIndex();
+  }
   updatePrecisionSelection(false);
 }
 
@@ -312,6 +316,39 @@ function resetPrecisionView() {
   if (precisionSelectedIndex !== null) ensurePrecisionSelectionVisible();
 }
 
+
+function precisionCenterIndex() {
+  if (!cells.length) return null;
+  if (precisionSelectedIndex !== null && precisionSelectedIndex >= 0 && precisionSelectedIndex < cells.length) return precisionSelectedIndex;
+  const size = precisionCellSize();
+  const viewWidth = boardFrameEl.clientWidth || boardEl.offsetWidth || size;
+  const viewHeight = boardFrameEl.clientHeight || boardEl.offsetHeight || size;
+  const visibleCenterX = ((viewWidth / 2) - precisionPanX) / Math.max(precisionZoom, 0.001);
+  const visibleCenterY = ((viewHeight / 2) - precisionPanY) / Math.max(precisionZoom, 0.001);
+  const col = Math.max(0, Math.min(config.cols - 1, Math.round((visibleCenterX / Math.max(size, 1)) - 0.5)));
+  const row = Math.max(0, Math.min(config.rows - 1, Math.round((visibleCenterY / Math.max(size, 1)) - 0.5)));
+  return row * config.cols + col;
+}
+
+function movePrecisionSelection(deltaRow = 0, deltaCol = 0) {
+  if (!cells.length || !isPrecisionMode()) return false;
+  const baseIndex = precisionCenterIndex();
+  if (baseIndex === null) return false;
+  const row = Math.floor(baseIndex / config.cols);
+  const col = baseIndex % config.cols;
+  const nextRow = Math.max(0, Math.min(config.rows - 1, row + deltaRow));
+  const nextCol = Math.max(0, Math.min(config.cols - 1, col + deltaCol));
+  const nextIndex = nextRow * config.cols + nextCol;
+  return selectPrecisionCell(nextIndex, true);
+}
+
+function updatePrecisionMoveButtons() {
+  const playable = Boolean(cells.length) && isPrecisionMode();
+  for (const button of precisionMoveButtons) {
+    button.disabled = !playable;
+  }
+}
+
 function precisionSelectionDescription(index) {
   if (index === null || index < 0 || index >= cells.length) return 'No tile selected';
   const row = Math.floor(index / config.cols) + 1;
@@ -355,7 +392,7 @@ function renderPrecisionPreview() {
       blank.setAttribute('aria-hidden', 'true');
       precisionPreviewGrid.appendChild(blank);
     }
-    precisionSelectionStatus.textContent = 'Tap a tile to aim';
+    precisionSelectionStatus.textContent = 'Use the arrows or tap the board to aim';
     return;
   }
 
@@ -405,6 +442,7 @@ function updatePrecisionControls() {
     precisionFlagButton.title = 'Select a covered tile first';
   }
   precisionRevealButton.title = chordable ? 'Chord this revealed number' : 'Reveal the selected tile';
+  updatePrecisionMoveButtons();
 }
 
 function updatePrecisionSelection(ensureVisible = true) {
@@ -422,11 +460,13 @@ function updatePrecisionSelection(ensureVisible = true) {
     const size = precisionCellSize();
     const row = Math.floor(precisionSelectedIndex / config.cols);
     const col = precisionSelectedIndex % config.cols;
+    const crosshairSize = Math.max(12, size * 0.7);
+    const offset = (size - crosshairSize) / 2;
     precisionCrosshairEl.hidden = false;
-    precisionCrosshairEl.style.width = `${size}px`;
-    precisionCrosshairEl.style.height = `${size}px`;
-    precisionCrosshairEl.style.left = `${col * size}px`;
-    precisionCrosshairEl.style.top = `${row * size}px`;
+    precisionCrosshairEl.style.width = `${crosshairSize}px`;
+    precisionCrosshairEl.style.height = `${crosshairSize}px`;
+    precisionCrosshairEl.style.left = `${(col * size) + offset}px`;
+    precisionCrosshairEl.style.top = `${(row * size) + offset}px`;
   }
   renderPrecisionPreview();
   updatePrecisionControls();
@@ -463,7 +503,7 @@ function applyTouchControlMode(nextMode, persist = true) {
   precisionPanel.hidden = !isPrecisionMode();
   boardFrameEl.classList.toggle('precision-mode', isPrecisionMode());
   touchHint.textContent = isPrecisionMode()
-    ? 'Precision: tap/drag to aim · Reveal or Flag below · two-finger pinch to zoom'
+    ? 'Precision: arrows or tap/drag to aim · Reveal or Flag below · pinch to zoom'
     : 'Tap to reveal · Hold to flag';
   if (!isPrecisionMode()) {
     precisionZoom = 1;
@@ -1337,7 +1377,7 @@ function showHelp(kind) {
       <p>Unlike traditional random Minesweeper, every generated field is tested by a deduction solver. If the solver would have to guess, that field is discarded before play begins.</p>
       <p>Version ${APP_VERSION} · ${DEDICATION}</p>
       <p>The original three-digit Minesweeper clock stopped at 999 seconds. This version preserves the classic 000–999 display, then continues with minutes and seconds so longer games are timed accurately.</p>
-      <p>For small touch screens, Options offers a Precision touch mode with a persistent crosshair, magnified 3×3 preview, large Reveal/Flag controls, and board-only two-finger zoom up to 3×.</p>
+      <p>For small touch screens, Options offers a Precision touch mode with a softer crosshair, large arrow buttons, a live magnified 3×3 preview, large Reveal/Flag controls, and board-only two-finger zoom up to 3×.</p>
       <p>Sounds are synthesized in the browser. Tactile feedback uses the standard Vibration API on supported devices and is enabled by default there. On iPhone/iPad, web apps do not expose a reliable programmable haptics API, so tactile feedback is shown as unavailable rather than using the previous intermittent native-switch workaround.</p>
       <p>No Microsoft code, artwork, sounds, or game assets are included.</p>`;
   } else {
@@ -1346,7 +1386,7 @@ function showHelp(kind) {
       <p>Reveal every square that does not contain a mine. A number tells you how many mines touch that square.</p>
       <ul>
         <li><strong>Phone / tablet — Direct:</strong> short tap to reveal; press and hold to cycle flag → question mark → clear.</li>
-        <li><strong>Phone / tablet — Precision:</strong> choose Precision touch under Options, tap or drag to aim the crosshair, then use the large Reveal or Flag button. Flag cycles flag → question mark → clear. Use a two-finger pinch/drag to zoom and pan the board; Fit returns to the full-board view.</li>
+        <li><strong>Phone / tablet — Precision:</strong> choose Precision touch under Options, then move the crosshair with the large arrow buttons or by tapping/dragging the board. The magnified 3×3 preview follows the crosshair. Use Reveal or Flag below; Flag cycles flag → question mark → clear. Use a two-finger pinch/drag to zoom and pan the board; Fit returns to the full-board view.</li>
         <li><strong>Mouse:</strong> left click to reveal; right click to cycle flag → question mark → clear.</li>
         <li><strong>Double-click a revealed number:</strong> chord-open its neighbours when the correct number of flags is present.</li>
         <li><strong>Keyboard:</strong> press F on a focused cell to mark it; F2 starts a new game.</li>
@@ -1858,6 +1898,23 @@ boardEl.addEventListener('keydown', (event) => {
     } else revealCell(index);
   }
 });
+
+
+const PRECISION_MOVE_DELTAS = {
+  up: [-1, 0],
+  down: [1, 0],
+  left: [0, -1],
+  right: [0, 1]
+};
+
+for (const button of precisionMoveButtons) {
+  button.addEventListener('click', () => {
+    const [deltaRow, deltaCol] = PRECISION_MOVE_DELTAS[button.dataset.precisionMove] || [0, 0];
+    if (movePrecisionSelection(deltaRow, deltaCol)) {
+      tactile(8);
+    }
+  });
+}
 
 precisionRevealButton.addEventListener('click', precisionRevealSelected);
 precisionFlagButton.addEventListener('click', precisionFlagSelected);

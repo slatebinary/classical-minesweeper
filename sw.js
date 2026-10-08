@@ -1,4 +1,4 @@
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.2.2';
 const CACHE_NAME = `classical-minesweeper-v${APP_VERSION}`;
 const APP_SHELL = [
   './',
