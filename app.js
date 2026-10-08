@@ -1,6 +1,6 @@
 import { generateCandidate, isLogicallySolvable } from './src/logic.js';
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.1';
 const DEDICATION = 'Dedicated to my daughter Lilly ♥';
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
@@ -53,6 +53,13 @@ const updateTitle = document.querySelector('#update-title');
 const updateMessage = document.querySelector('#update-message');
 const updateNowButton = document.querySelector('#update-now');
 const updateLaterButton = document.querySelector('#update-later');
+const precisionPanel = document.querySelector('#precision-panel');
+const precisionPreviewGrid = document.querySelector('#precision-preview-grid');
+const precisionSelectionStatus = document.querySelector('#precision-selection-status');
+const precisionRevealButton = document.querySelector('#precision-reveal');
+const precisionFlagButton = document.querySelector('#precision-flag');
+const precisionFitButton = document.querySelector('#precision-fit');
+const touchHint = document.querySelector('#touch-hint');
 
 let difficulty = localStorage.getItem('minesweeper:difficulty') || 'beginner';
 if (!PRESETS[difficulty]) difficulty = 'beginner';
@@ -88,6 +95,17 @@ let updateCheckPromise = null;
 let updateActivationRequested = false;
 let controllerChangeReloading = false;
 let lastUpdateCheckAt = 0;
+let touchControlMode = localStorage.getItem('minesweeper:touch-controls') || 'direct';
+if (!['direct', 'precision'].includes(touchControlMode)) touchControlMode = 'direct';
+let precisionSelectedIndex = null;
+let precisionCrosshairEl = null;
+let precisionZoom = 1;
+let precisionPanX = 0;
+let precisionPanY = 0;
+let precisionPointers = new Map();
+let precisionPinch = null;
+let precisionGestureWasPinch = false;
+const PRECISION_MAX_ZOOM = 3;
 
 const supportsWorker = typeof Worker !== 'undefined';
 if (supportsWorker) generatorWorker = new Worker('./generator-worker.js', { type: 'module' });
@@ -206,6 +224,7 @@ function fitBoardToViewport() {
   boardEl.style.setProperty('--cell-size', `${fittedCellSize}px`);
   boardEl.style.setProperty('--cell-bevel', `${bevel}px`);
   boardEl.dataset.cellSize = String(fittedCellSize);
+  if (touchControlMode === 'precision') requestAnimationFrame(() => applyPrecisionTransform());
 }
 
 let fitFrame = 0;
@@ -230,7 +249,326 @@ function renderBoard() {
     frag.appendChild(cell);
   }
   boardEl.appendChild(frag);
+  precisionCrosshairEl = document.createElement('div');
+  precisionCrosshairEl.className = 'precision-crosshair';
+  precisionCrosshairEl.setAttribute('aria-hidden', 'true');
+  precisionCrosshairEl.hidden = true;
+  boardEl.appendChild(precisionCrosshairEl);
   fitBoardToViewport();
+  updatePrecisionSelection(false);
+}
+
+
+function isPrecisionMode() {
+  return touchControlMode === 'precision';
+}
+
+function precisionCellSize() {
+  return Number.parseFloat(boardEl.dataset.cellSize || getComputedStyle(boardEl).getPropertyValue('--cell-size')) || 24;
+}
+
+function clampPrecisionPan() {
+  if (!isPrecisionMode()) {
+    precisionPanX = 0;
+    precisionPanY = 0;
+    return;
+  }
+  const frameWidth = boardFrameEl.clientWidth;
+  const frameHeight = boardFrameEl.clientHeight;
+  const scaledWidth = boardEl.offsetWidth * precisionZoom;
+  const scaledHeight = boardEl.offsetHeight * precisionZoom;
+  const minX = Math.min(0, frameWidth - scaledWidth);
+  const minY = Math.min(0, frameHeight - scaledHeight);
+  precisionPanX = Math.min(0, Math.max(minX, precisionPanX));
+  precisionPanY = Math.min(0, Math.max(minY, precisionPanY));
+}
+
+function applyPrecisionTransform() {
+  if (!isPrecisionMode()) {
+    boardEl.style.transform = '';
+    boardEl.style.transformOrigin = '';
+    boardFrameEl.classList.remove('precision-active', 'precision-zoomed');
+    return;
+  }
+  clampPrecisionPan();
+  boardFrameEl.classList.add('precision-active');
+  boardFrameEl.classList.toggle('precision-zoomed', precisionZoom > 1.001);
+  boardEl.style.transformOrigin = '0 0';
+  boardEl.style.transform = `translate3d(${precisionPanX}px, ${precisionPanY}px, 0) scale(${precisionZoom})`;
+  if (precisionFitButton) {
+    precisionFitButton.title = precisionZoom > 1.001
+      ? `Return to fitted view (currently ${Math.round(precisionZoom * 100)}%)`
+      : 'Board is fitted to the available width';
+  }
+}
+
+function resetPrecisionView() {
+  precisionZoom = 1;
+  precisionPanX = 0;
+  precisionPanY = 0;
+  precisionPinch = null;
+  precisionPointers.clear();
+  applyPrecisionTransform();
+  if (precisionSelectedIndex !== null) ensurePrecisionSelectionVisible();
+}
+
+function precisionSelectionDescription(index) {
+  if (index === null || index < 0 || index >= cells.length) return 'No tile selected';
+  const row = Math.floor(index / config.cols) + 1;
+  const col = (index % config.cols) + 1;
+  let stateText = 'Covered';
+  if (revealed[index]) {
+    const value = board ? board.counts[index] : 0;
+    stateText = value ? `Revealed ${value}` : 'Revealed empty';
+  } else if (marks[index] === 1) stateText = 'Flagged';
+  else if (marks[index] === 2) stateText = 'Question mark';
+  return `Row ${row} · Column ${col} · ${stateText}`;
+}
+
+function ensurePrecisionSelectionVisible() {
+  if (!isPrecisionMode() || precisionSelectedIndex === null || precisionZoom <= 1.001) return;
+  const size = precisionCellSize();
+  const row = Math.floor(precisionSelectedIndex / config.cols);
+  const col = precisionSelectedIndex % config.cols;
+  const margin = 10;
+  const left = col * size * precisionZoom + precisionPanX;
+  const top = row * size * precisionZoom + precisionPanY;
+  const right = left + size * precisionZoom;
+  const bottom = top + size * precisionZoom;
+  const width = boardFrameEl.clientWidth;
+  const height = boardFrameEl.clientHeight;
+
+  if (left < margin) precisionPanX += margin - left;
+  else if (right > width - margin) precisionPanX -= right - (width - margin);
+  if (top < margin) precisionPanY += margin - top;
+  else if (bottom > height - margin) precisionPanY -= bottom - (height - margin);
+  applyPrecisionTransform();
+}
+
+function renderPrecisionPreview() {
+  if (!precisionPreviewGrid) return;
+  precisionPreviewGrid.replaceChildren();
+  if (precisionSelectedIndex === null || !cells.length) {
+    for (let i = 0; i < 9; i++) {
+      const blank = document.createElement('span');
+      blank.className = 'cell preview-cell preview-blank';
+      blank.setAttribute('aria-hidden', 'true');
+      precisionPreviewGrid.appendChild(blank);
+    }
+    precisionSelectionStatus.textContent = 'Tap a tile to aim';
+    return;
+  }
+
+  const selectedRow = Math.floor(precisionSelectedIndex / config.cols);
+  const selectedCol = precisionSelectedIndex % config.cols;
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      const row = selectedRow + dr;
+      const col = selectedCol + dc;
+      if (row < 0 || row >= config.rows || col < 0 || col >= config.cols) {
+        const blank = document.createElement('span');
+        blank.className = 'cell preview-cell preview-blank';
+        blank.setAttribute('aria-hidden', 'true');
+        precisionPreviewGrid.appendChild(blank);
+        continue;
+      }
+      const source = cells[row * config.cols + col];
+      const clone = source.cloneNode(true);
+      clone.removeAttribute('tabindex');
+      clone.removeAttribute('role');
+      clone.removeAttribute('aria-label');
+      clone.removeAttribute('data-index');
+      clone.classList.remove('pressing', 'long-press-active', 'first-click');
+      clone.classList.add('preview-cell');
+      if (dr === 0 && dc === 0) clone.classList.add('preview-selected');
+      clone.setAttribute('aria-hidden', 'true');
+      precisionPreviewGrid.appendChild(clone);
+    }
+  }
+  precisionSelectionStatus.textContent = precisionSelectionDescription(precisionSelectedIndex);
+}
+
+function updatePrecisionControls() {
+  const selected = precisionSelectedIndex !== null && precisionSelectedIndex >= 0 && precisionSelectedIndex < cells.length;
+  const playable = status === 'ready' || status === 'playing';
+  const isRevealed = selected && Boolean(revealed[precisionSelectedIndex]);
+  const isFlagged = selected && marks[precisionSelectedIndex] === 1;
+  const chordable = isRevealed && board && board.counts[precisionSelectedIndex] > 0;
+
+  precisionRevealButton.disabled = !selected || !playable || (isFlagged && !isRevealed) || (isRevealed && !chordable);
+  precisionFlagButton.disabled = !selected || !playable || isRevealed;
+
+  if (selected && !isRevealed) {
+    const mark = marks[precisionSelectedIndex];
+    precisionFlagButton.title = mark === 0 ? 'Place a flag' : mark === 1 ? 'Change the flag to a question mark' : 'Clear the question mark';
+  } else {
+    precisionFlagButton.title = 'Select a covered tile first';
+  }
+  precisionRevealButton.title = chordable ? 'Chord this revealed number' : 'Reveal the selected tile';
+}
+
+function updatePrecisionSelection(ensureVisible = true) {
+  if (!isPrecisionMode()) {
+    if (precisionCrosshairEl) precisionCrosshairEl.hidden = true;
+    renderPrecisionPreview();
+    updatePrecisionControls();
+    return;
+  }
+  const valid = precisionSelectedIndex !== null && precisionSelectedIndex >= 0 && precisionSelectedIndex < cells.length;
+  if (!valid) {
+    precisionSelectedIndex = null;
+    if (precisionCrosshairEl) precisionCrosshairEl.hidden = true;
+  } else if (precisionCrosshairEl) {
+    const size = precisionCellSize();
+    const row = Math.floor(precisionSelectedIndex / config.cols);
+    const col = precisionSelectedIndex % config.cols;
+    precisionCrosshairEl.hidden = false;
+    precisionCrosshairEl.style.width = `${size}px`;
+    precisionCrosshairEl.style.height = `${size}px`;
+    precisionCrosshairEl.style.left = `${col * size}px`;
+    precisionCrosshairEl.style.top = `${row * size}px`;
+  }
+  renderPrecisionPreview();
+  updatePrecisionControls();
+  if (ensureVisible && valid) ensurePrecisionSelectionVisible();
+}
+
+function selectPrecisionCell(index, ensureVisible = true) {
+  if (!Number.isInteger(index) || index < 0 || index >= cells.length) return false;
+  precisionSelectedIndex = index;
+  updatePrecisionSelection(ensureVisible);
+  return true;
+}
+
+function clearPrecisionSelection() {
+  precisionSelectedIndex = null;
+  updatePrecisionSelection(false);
+}
+
+function updateTouchControlMenu() {
+  document.querySelectorAll('[data-touch-controls]').forEach((button) => {
+    const active = button.dataset.touchControls === touchControlMode;
+    button.setAttribute('aria-checked', String(active));
+    button.querySelector('.check-slot').textContent = active ? '✓' : '';
+  });
+}
+
+function applyTouchControlMode(nextMode, persist = true) {
+  touchControlMode = nextMode === 'precision' ? 'precision' : 'direct';
+  if (persist) localStorage.setItem('minesweeper:touch-controls', touchControlMode);
+  cancelTouchPress(false);
+  precisionPointers.clear();
+  precisionPinch = null;
+  precisionGestureWasPinch = false;
+  precisionPanel.hidden = !isPrecisionMode();
+  boardFrameEl.classList.toggle('precision-mode', isPrecisionMode());
+  touchHint.textContent = isPrecisionMode()
+    ? 'Precision: tap/drag to aim · Reveal or Flag below · two-finger pinch to zoom'
+    : 'Tap to reveal · Hold to flag';
+  if (!isPrecisionMode()) {
+    precisionZoom = 1;
+    precisionPanX = 0;
+    precisionPanY = 0;
+    clearPrecisionSelection();
+  }
+  applyPrecisionTransform();
+  updateTouchControlMenu();
+  updatePrecisionSelection(false);
+}
+
+function precisionCellAtPoint(clientX, clientY) {
+  const target = document.elementFromPoint(clientX, clientY);
+  const cell = target?.closest?.('.cell');
+  if (!cell || !boardEl.contains(cell) || cell.classList.contains('preview-cell')) return null;
+  const index = Number(cell.dataset.index);
+  return Number.isInteger(index) ? index : null;
+}
+
+function precisionPointerDown(event, cell) {
+  if (event.button !== 0 && event.pointerType === 'mouse') return;
+  ensureAudio();
+  if (event.pointerType === 'mouse') {
+    selectPrecisionCell(Number(cell.dataset.index));
+    return;
+  }
+
+  event.preventDefault();
+  window.getSelection?.()?.removeAllRanges?.();
+  precisionPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  try { boardEl.setPointerCapture(event.pointerId); } catch {}
+
+  if (precisionPointers.size === 1) {
+    precisionGestureWasPinch = false;
+    selectPrecisionCell(Number(cell.dataset.index));
+    tactile(10);
+    return;
+  }
+
+  if (precisionPointers.size === 2) {
+    precisionGestureWasPinch = true;
+    const pts = [...precisionPointers.values()];
+    const dx = pts[1].x - pts[0].x;
+    const dy = pts[1].y - pts[0].y;
+    const rect = boardFrameEl.getBoundingClientRect();
+    const midX = (pts[0].x + pts[1].x) / 2 - rect.left;
+    const midY = (pts[0].y + pts[1].y) / 2 - rect.top;
+    precisionPinch = {
+      distance: Math.max(1, Math.hypot(dx, dy)),
+      startZoom: precisionZoom,
+      anchorX: (midX - precisionPanX) / precisionZoom,
+      anchorY: (midY - precisionPanY) / precisionZoom
+    };
+  }
+}
+
+function precisionPointerMove(event) {
+  if (!precisionPointers.has(event.pointerId)) return;
+  event.preventDefault();
+  precisionPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+  if (precisionPointers.size >= 2 && precisionPinch) {
+    const pts = [...precisionPointers.values()].slice(0, 2);
+    const dx = pts[1].x - pts[0].x;
+    const dy = pts[1].y - pts[0].y;
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const rect = boardFrameEl.getBoundingClientRect();
+    const midX = (pts[0].x + pts[1].x) / 2 - rect.left;
+    const midY = (pts[0].y + pts[1].y) / 2 - rect.top;
+    precisionZoom = Math.max(1, Math.min(PRECISION_MAX_ZOOM, precisionPinch.startZoom * (distance / precisionPinch.distance)));
+    precisionPanX = midX - precisionPinch.anchorX * precisionZoom;
+    precisionPanY = midY - precisionPinch.anchorY * precisionZoom;
+    applyPrecisionTransform();
+    return;
+  }
+
+  if (!precisionGestureWasPinch && precisionPointers.size === 1) {
+    const index = precisionCellAtPoint(event.clientX, event.clientY);
+    if (index !== null && index !== precisionSelectedIndex) selectPrecisionCell(index, false);
+  }
+}
+
+function precisionPointerEnd(event) {
+  if (!precisionPointers.has(event.pointerId)) return;
+  precisionPointers.delete(event.pointerId);
+  if (precisionPointers.size < 2) precisionPinch = null;
+  if (precisionPointers.size === 0) {
+    precisionGestureWasPinch = false;
+    if (precisionSelectedIndex !== null) ensurePrecisionSelectionVisible();
+  }
+}
+
+function precisionRevealSelected() {
+  if (precisionSelectedIndex === null) return;
+  const index = precisionSelectedIndex;
+  if (revealed[index]) chord(index);
+  else revealCell(index);
+  updatePrecisionSelection(false);
+}
+
+function precisionFlagSelected() {
+  if (precisionSelectedIndex === null) return;
+  if (cycleMark(precisionSelectedIndex)) tactile([18, 24, 26]);
+  updatePrecisionSelection(false);
 }
 
 function updateDifficultyChecks() {
@@ -681,6 +1019,10 @@ function newGame(nextDifficulty = difficulty) {
   updateCounter();
   setFace('normal');
   generationNote.textContent = 'Every board is generated to be solvable by deduction without guessing.';
+  precisionSelectedIndex = null;
+  precisionZoom = 1;
+  precisionPanX = 0;
+  precisionPanY = 0;
   renderBoard();
   updateDifficultyChecks();
   closeMenus();
@@ -786,6 +1128,7 @@ function revealCell(index) {
     playRevealSound();
   }
   checkWin();
+  updatePrecisionSelection(false);
 }
 
 function neighbors(index) {
@@ -831,6 +1174,7 @@ function cycleMark(index, withSound = true) {
   }
   updateCounter();
   if (withSound) playFlagSound();
+  updatePrecisionSelection(false);
   return true;
 }
 
@@ -871,6 +1215,7 @@ function lose(explodedIndex) {
     }
   }
   generationNote.textContent = 'Mine hit. Press F2 or the face to start a new no-guess field.';
+  updatePrecisionSelection(false);
 }
 
 function checkWin() {
@@ -893,6 +1238,7 @@ function checkWin() {
   playWinSound();
   tactile([12, 28, 12, 28, 22]);
   generationNote.textContent = `Solved without guessing in ${formatElapsedHuman(elapsedSeconds)}.`;
+  updatePrecisionSelection(false);
 }
 
 function saveBestTime() {
@@ -991,6 +1337,7 @@ function showHelp(kind) {
       <p>Unlike traditional random Minesweeper, every generated field is tested by a deduction solver. If the solver would have to guess, that field is discarded before play begins.</p>
       <p>Version ${APP_VERSION} · ${DEDICATION}</p>
       <p>The original three-digit Minesweeper clock stopped at 999 seconds. This version preserves the classic 000–999 display, then continues with minutes and seconds so longer games are timed accurately.</p>
+      <p>For small touch screens, Options offers a Precision touch mode with a persistent crosshair, magnified 3×3 preview, large Reveal/Flag controls, and board-only two-finger zoom up to 3×.</p>
       <p>Sounds are synthesized in the browser. Tactile feedback uses the standard Vibration API on supported devices and is enabled by default there. On iPhone/iPad, web apps do not expose a reliable programmable haptics API, so tactile feedback is shown as unavailable rather than using the previous intermittent native-switch workaround.</p>
       <p>No Microsoft code, artwork, sounds, or game assets are included.</p>`;
   } else {
@@ -998,7 +1345,8 @@ function showHelp(kind) {
     helpContent.innerHTML = `
       <p>Reveal every square that does not contain a mine. A number tells you how many mines touch that square.</p>
       <ul>
-        <li><strong>Phone / tablet:</strong> short tap to reveal; press and hold to cycle flag → question mark → clear.</li>
+        <li><strong>Phone / tablet — Direct:</strong> short tap to reveal; press and hold to cycle flag → question mark → clear.</li>
+        <li><strong>Phone / tablet — Precision:</strong> choose Precision touch under Options, tap or drag to aim the crosshair, then use the large Reveal or Flag button. Flag cycles flag → question mark → clear. Use a two-finger pinch/drag to zoom and pan the board; Fit returns to the full-board view.</li>
         <li><strong>Mouse:</strong> left click to reveal; right click to cycle flag → question mark → clear.</li>
         <li><strong>Double-click a revealed number:</strong> chord-open its neighbours when the correct number of flags is present.</li>
         <li><strong>Keyboard:</strong> press F on a focused cell to mark it; F2 starts a new game.</li>
@@ -1338,6 +1686,7 @@ document.querySelector('#options-menu').addEventListener('click', (event) => {
   if (!button) return;
   if (button.dataset.setting === 'sound') toggleSound();
   else if (button.dataset.setting === 'tactile') toggleTactile();
+  else if (button.dataset.touchControls) applyTouchControlMode(button.dataset.touchControls);
   else if (button.dataset.theme) applyTheme(button.dataset.theme);
 });
 
@@ -1355,6 +1704,11 @@ document.querySelector('#help-menu').addEventListener('click', async (event) => 
 boardEl.addEventListener('click', (event) => {
   const cell = event.target.closest('.cell');
   if (!cell) return;
+  if (isPrecisionMode()) {
+    event.preventDefault();
+    selectPrecisionCell(Number(cell.dataset.index));
+    return;
+  }
   if (performance.now() < suppressClickUntil) {
     event.preventDefault();
     return;
@@ -1366,6 +1720,10 @@ boardEl.addEventListener('contextmenu', (event) => {
   const cell = event.target.closest('.cell');
   if (!cell) return;
   event.preventDefault();
+  if (isPrecisionMode()) {
+    selectPrecisionCell(Number(cell.dataset.index));
+    return;
+  }
   if (performance.now() < suppressContextMenuUntil) return;
   cycleMark(Number(cell.dataset.index));
 });
@@ -1374,12 +1732,20 @@ boardEl.addEventListener('dblclick', (event) => {
   const cell = event.target.closest('.cell');
   if (!cell) return;
   event.preventDefault();
+  if (isPrecisionMode()) {
+    selectPrecisionCell(Number(cell.dataset.index));
+    return;
+  }
   chord(Number(cell.dataset.index));
 });
 
 boardEl.addEventListener('pointerdown', (event) => {
   const cell = event.target.closest('.cell');
-  if (!cell || event.button !== 0) return;
+  if (!cell || cell.classList.contains('preview-cell') || event.button !== 0) return;
+  if (isPrecisionMode()) {
+    precisionPointerDown(event, cell);
+    return;
+  }
   // Give an immediate, subtle physical acknowledgement where the browser
   // exposes the standard Vibration API. This is a no-op on iPhone/iPad.
   if (event.pointerType !== 'mouse') tactile(10);
@@ -1425,6 +1791,10 @@ boardEl.addEventListener('pointerdown', (event) => {
 });
 
 boardEl.addEventListener('pointermove', (event) => {
+  if (isPrecisionMode()) {
+    precisionPointerMove(event);
+    return;
+  }
   if (!touchPress || event.pointerId !== touchPress.pointerId || touchPress.longPressed) return;
   const dx = event.clientX - touchPress.startX;
   const dy = event.clientY - touchPress.startY;
@@ -1432,6 +1802,10 @@ boardEl.addEventListener('pointermove', (event) => {
 });
 
 boardEl.addEventListener('pointerup', (event) => {
+  if (isPrecisionMode()) {
+    precisionPointerEnd(event);
+    return;
+  }
   if (event.pointerType === 'mouse') return;
   if (!touchPress || event.pointerId !== touchPress.pointerId) return;
   const press = touchPress;
@@ -1444,9 +1818,13 @@ boardEl.addEventListener('pointerup', (event) => {
   if (status !== 'lost' && status !== 'won' && status !== 'generating') setFace('normal');
 });
 
-boardEl.addEventListener('pointercancel', () => cancelTouchPress());
-boardEl.addEventListener('lostpointercapture', () => {
-  if (touchPress && !touchPress.longPressed) cancelTouchPress();
+boardEl.addEventListener('pointercancel', (event) => {
+  if (isPrecisionMode()) precisionPointerEnd(event);
+  else cancelTouchPress();
+});
+boardEl.addEventListener('lostpointercapture', (event) => {
+  if (isPrecisionMode()) precisionPointerEnd(event);
+  else if (touchPress && !touchPress.longPressed) cancelTouchPress();
 });
 
 document.addEventListener('pointerup', () => {
@@ -1458,14 +1836,32 @@ boardEl.addEventListener('keydown', (event) => {
   const cell = event.target.closest('.cell');
   if (!cell) return;
   const index = Number(cell.dataset.index);
-  if (event.key.toLowerCase() === 'f') {
+  if (isPrecisionMode() && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
     event.preventDefault();
-    cycleMark(index);
+    const base = precisionSelectedIndex ?? index;
+    const row = Math.floor(base / config.cols);
+    const col = base % config.cols;
+    const nextRow = Math.max(0, Math.min(config.rows - 1, row + (event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0)));
+    const nextCol = Math.max(0, Math.min(config.cols - 1, col + (event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0)));
+    selectPrecisionCell(nextRow * config.cols + nextCol);
+  } else if (event.key.toLowerCase() === 'f') {
+    event.preventDefault();
+    if (isPrecisionMode()) {
+      selectPrecisionCell(precisionSelectedIndex ?? index);
+      precisionFlagSelected();
+    } else cycleMark(index);
   } else if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
-    revealCell(index);
+    if (isPrecisionMode()) {
+      selectPrecisionCell(precisionSelectedIndex ?? index);
+      precisionRevealSelected();
+    } else revealCell(index);
   }
 });
+
+precisionRevealButton.addEventListener('click', precisionRevealSelected);
+precisionFlagButton.addEventListener('click', precisionFlagSelected);
+precisionFitButton.addEventListener('click', resetPrecisionView);
 
 faceButton.addEventListener('click', () => newGame());
 
@@ -1545,4 +1941,5 @@ document.querySelector('#app-version').textContent = `v${APP_VERSION}`;
 applyTheme(theme, false);
 updateSoundMenu();
 updateTactileMenu();
+applyTouchControlMode(touchControlMode, false);
 newGame();

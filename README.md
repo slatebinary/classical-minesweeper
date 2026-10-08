@@ -18,7 +18,8 @@ The key difference from ordinary Minesweeper is **no-guess generation**: after y
 - Guaranteed first-click safety, including the eight surrounding cells.
 - Guaranteed no-guess boards for all built-in difficulty levels.
 - Mouse: left-click reveal; right-click cycles flag → question mark → clear.
-- Touch: short tap reveals; press-and-hold cycles flag → question mark → clear.
+- Touch Direct mode: short tap reveals; press-and-hold cycles flag → question mark → clear.
+- Optional Precision touch mode for small screens: tap/drag a persistent crosshair to select a tile, inspect a magnified 3×3 preview, then use large Reveal / Flag controls. Two-finger pinch/drag zooms and pans the board up to 3×; Fit resets to the whole-board view.
 - Double-click a revealed number to chord-open surrounding cells when its flag count matches.
 - F2 or the face button starts a new game.
 - Synthesized reveal, marking, explosion, and win sounds with a persistent Sound on/off option.
@@ -113,6 +114,17 @@ This project is an original clean-room implementation. It does **not** contain M
 ## License
 
 MIT License. See `LICENSE`.
+
+## v1.2.1
+
+- Adds an optional **Options → Precision touch** mode while keeping Direct touch as the default.
+- Precision mode selects a tile with a persistent crosshair instead of immediately opening it.
+- Adds a magnified 3×3 preview and clear row/column/state readout for the selected tile.
+- Adds large **Reveal**, **Flag**, and **Fit** controls. Flag cycles flag → question mark → clear, while Reveal can also chord a selected revealed number.
+- Adds board-only two-finger pinch zoom and pan from 1× to 3×. **Fit** returns to the fitted full-board view; no permanent +/− controls are added, keeping the interface compact.
+- Tap/drag moves the crosshair between tiles; keyboard arrows also move the precision selection one tile at a time.
+- Keeps the selected tile visible when zoomed and preserves the existing dynamic full-board fit on narrow screens.
+- Stores Direct/Precision preference locally.
 
 ## v1.2.0
 

@@ -56,6 +56,9 @@
             <button role="menuitemcheckbox" data-setting="sound" aria-checked="true"><span class="check-slot" id="sound-check">✓</span><span>Sound</span></button>
             <button role="menuitemcheckbox" data-setting="tactile" aria-checked="true" title="Uses device vibration when the browser supports it"><span class="check-slot" id="tactile-check">✓</span><span class="setting-label">Tactile feedback</span></button>
             <div class="menu-separator"></div>
+            <button role="menuitemradio" data-touch-controls="direct" aria-checked="true"><span class="check-slot">✓</span><span>Direct touch</span></button>
+            <button role="menuitemradio" data-touch-controls="precision" aria-checked="false"><span class="check-slot"></span><span>Precision touch</span></button>
+            <div class="menu-separator"></div>
             <button role="menuitemradio" data-theme="system" aria-checked="true"><span class="check-slot">✓</span><span>System theme</span></button>
             <button role="menuitemradio" data-theme="light" aria-checked="false"><span class="check-slot"></span><span>Light theme</span></button>
             <button role="menuitemradio" data-theme="dark" aria-checked="false"><span class="check-slot"></span><span>Dark theme</span></button>
@@ -84,6 +87,18 @@
         <div class="board-frame">
           <div class="board" id="board" role="grid" aria-label="Minesweeper board"></div>
         </div>
+
+        <section class="precision-panel" id="precision-panel" aria-label="Precision touch controls" hidden>
+          <div class="precision-preview-wrap">
+            <div class="precision-preview" id="precision-preview-grid" aria-hidden="true"></div>
+            <div class="precision-selection-status" id="precision-selection-status" aria-live="polite">Tap a tile to aim</div>
+          </div>
+          <div class="precision-actions">
+            <button type="button" id="precision-reveal" disabled>Reveal</button>
+            <button type="button" id="precision-flag" disabled>Flag</button>
+            <button type="button" id="precision-fit">Fit</button>
+          </div>
+        </section>
       </div>
     </section>
 
@@ -100,7 +115,7 @@
 
     <p class="touch-hint" id="touch-hint">Tap to reveal · Hold to flag</p>
     <p class="generation-note" id="generation-note" aria-live="polite">Every board is generated to be solvable by deduction without guessing.</p>
-    <p class="app-credit"><span id="app-version">v1.2.0</span><span class="credit-separator" aria-hidden="true"> · </span><span>Dedicated to my daughter Lilly <span class="dedication-heart" aria-label="heart">♥</span></span></p>
+    <p class="app-credit"><span id="app-version">v1.2.1</span><span class="credit-separator" aria-hidden="true"> · </span><span>Dedicated to my daughter Lilly <span class="dedication-heart" aria-label="heart">♥</span></span></p>
   </main>
 
   <dialog id="best-times-dialog" class="win-dialog">
