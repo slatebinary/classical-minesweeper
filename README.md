@@ -19,7 +19,7 @@ The key difference from ordinary Minesweeper is **no-guess generation**: after y
 - Guaranteed no-guess boards for all built-in difficulty levels.
 - Mouse: left-click reveal; right-click cycles flag → question mark → clear.
 - Touch Direct mode: short tap reveals; press-and-hold cycles flag → question mark → clear.
-- Optional Precision touch mode for small screens: use large arrow buttons or tap/drag to move a gentler crosshair, inspect a live magnified 3×3 preview that follows the selection, then use large Reveal / Flag controls. Two-finger pinch/drag zooms and pans the board up to 3×; Fit resets to the whole-board view.
+- Optional Precision touch mode for small screens: use a compact four-arrow pad or tap/drag to move an unobtrusive corner crosshair, inspect a live magnified 3×3 preview that follows the selection, then use large Reveal / Flag controls. Two-finger pinch/drag zooms and pans the board up to 3×; Fit resets to the whole-board view.
 - Double-click a revealed number to chord-open surrounding cells when its flag count matches.
 - F2 or the face button starts a new game.
 - Synthesized reveal, marking, explosion, and win sounds with a persistent Sound on/off option.
@@ -114,6 +114,14 @@ This project is an original clean-room implementation. It does **not** contain M
 ## License
 
 MIT License. See `LICENSE`.
+
+## v1.2.3
+
+- Simplifies Precision-mode navigation into a compact, fixed four-arrow D-pad that stays correctly grouped beside the 3×3 preview on narrow phones.
+- Removes the crosshair's central plus mark and replaces the heavy target with four small corner brackets, leaving the tile centre unobstructed.
+- Separates the primary Reveal / Flag buttons from the secondary Fit board control so the control hierarchy is clearer.
+- Suppresses browser double-tap zoom on the game controls and adds a movement threshold before two-finger Precision zoom starts, reducing accidental zooming from rapid or slightly overlapping touches.
+- Keeps the 3×3 preview centred on and updated with every crosshair movement.
 
 ## v1.2.2
 

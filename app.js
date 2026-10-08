@@ -1,6 +1,6 @@
 import { generateCandidate, isLogicallySolvable } from './src/logic.js';
 
-const APP_VERSION = '1.2.2';
+const APP_VERSION = '1.2.3';
 const DEDICATION = 'Dedicated to my daughter Lilly ♥';
 const LONG_PRESS_MS = 480;
 const LONG_PRESS_MOVE_PX = 12;
@@ -107,6 +107,7 @@ let precisionPointers = new Map();
 let precisionPinch = null;
 let precisionGestureWasPinch = false;
 const PRECISION_MAX_ZOOM = 3;
+const PRECISION_PINCH_THRESHOLD_PX = 14;
 
 const supportsWorker = typeof Worker !== 'undefined';
 if (supportsWorker) generatorWorker = new Worker('./generator-worker.js', { type: 'module' });
@@ -556,7 +557,8 @@ function precisionPointerDown(event, cell) {
       distance: Math.max(1, Math.hypot(dx, dy)),
       startZoom: precisionZoom,
       anchorX: (midX - precisionPanX) / precisionZoom,
-      anchorY: (midY - precisionPanY) / precisionZoom
+      anchorY: (midY - precisionPanY) / precisionZoom,
+      active: false
     };
   }
 }
@@ -571,6 +573,10 @@ function precisionPointerMove(event) {
     const dx = pts[1].x - pts[0].x;
     const dy = pts[1].y - pts[0].y;
     const distance = Math.max(1, Math.hypot(dx, dy));
+    if (!precisionPinch.active) {
+      if (Math.abs(distance - precisionPinch.distance) < PRECISION_PINCH_THRESHOLD_PX) return;
+      precisionPinch.active = true;
+    }
     const rect = boardFrameEl.getBoundingClientRect();
     const midX = (pts[0].x + pts[1].x) / 2 - rect.left;
     const midY = (pts[0].y + pts[1].y) / 2 - rect.top;
@@ -1377,7 +1383,7 @@ function showHelp(kind) {
       <p>Unlike traditional random Minesweeper, every generated field is tested by a deduction solver. If the solver would have to guess, that field is discarded before play begins.</p>
       <p>Version ${APP_VERSION} · ${DEDICATION}</p>
       <p>The original three-digit Minesweeper clock stopped at 999 seconds. This version preserves the classic 000–999 display, then continues with minutes and seconds so longer games are timed accurately.</p>
-      <p>For small touch screens, Options offers a Precision touch mode with a softer crosshair, large arrow buttons, a live magnified 3×3 preview, large Reveal/Flag controls, and board-only two-finger zoom up to 3×.</p>
+      <p>For small touch screens, Options offers a Precision touch mode with an unobtrusive corner crosshair, a compact four-arrow navigation pad, a live magnified 3×3 preview, large Reveal/Flag controls, and deliberate two-finger zoom up to 3×.</p>
       <p>Sounds are synthesized in the browser. Tactile feedback uses the standard Vibration API on supported devices and is enabled by default there. On iPhone/iPad, web apps do not expose a reliable programmable haptics API, so tactile feedback is shown as unavailable rather than using the previous intermittent native-switch workaround.</p>
       <p>No Microsoft code, artwork, sounds, or game assets are included.</p>`;
   } else {
@@ -1386,7 +1392,7 @@ function showHelp(kind) {
       <p>Reveal every square that does not contain a mine. A number tells you how many mines touch that square.</p>
       <ul>
         <li><strong>Phone / tablet — Direct:</strong> short tap to reveal; press and hold to cycle flag → question mark → clear.</li>
-        <li><strong>Phone / tablet — Precision:</strong> choose Precision touch under Options, then move the crosshair with the large arrow buttons or by tapping/dragging the board. The magnified 3×3 preview follows the crosshair. Use Reveal or Flag below; Flag cycles flag → question mark → clear. Use a two-finger pinch/drag to zoom and pan the board; Fit returns to the full-board view.</li>
+        <li><strong>Phone / tablet — Precision:</strong> choose Precision touch under Options, then move the crosshair with the compact four-arrow pad or by tapping/dragging the board. The magnified 3×3 preview follows the crosshair. Use Reveal or Flag below; Flag cycles flag → question mark → clear. Use a two-finger pinch/drag to zoom and pan the board; Fit returns to the full-board view.</li>
         <li><strong>Mouse:</strong> left click to reveal; right click to cycle flag → question mark → clear.</li>
         <li><strong>Double-click a revealed number:</strong> chord-open its neighbours when the correct number of flags is present.</li>
         <li><strong>Keyboard:</strong> press F on a focused cell to mark it; F2 starts a new game.</li>
@@ -1972,6 +1978,12 @@ window.addEventListener('beforeinstallprompt', (event) => {
 window.addEventListener('appinstalled', () => {
   deferredInstallPrompt = null;
 });
+
+// Prevent rapid taps on the game controls from triggering browser double-tap zoom.
+// Precision-board pinch zoom remains available through the dedicated two-pointer handler.
+desktopShellEl.addEventListener('dblclick', (event) => {
+  if (event.target.closest('.window, .precision-panel')) event.preventDefault();
+}, { passive: false });
 
 window.addEventListener('resize', scheduleBoardFit, { passive: true });
 window.addEventListener('orientationchange', scheduleBoardFit, { passive: true });
