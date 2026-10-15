@@ -31,19 +31,27 @@ test('incident: all screenshot clues agree with the actual mine arrangement', ()
   }
 });
 
-test('incident: the last two covered cells are indistinguishable from revealed clues', () => {
+test('incident: visible clues uniquely identify the final mine', () => {
   const actual = createBoard(9, 9, [...flagged, actualMine]);
-  const alternate = createBoard(9, 9, [...flagged, alternateMine]);
-  for (const [row, col, clue] of opened) {
-    const i = index(row, col);
-    assert.equal(actual.counts[i], clue);
-    assert.equal(alternate.counts[i], clue,
-      `Swapping the final mine should preserve the visible clue at (${row},${col})`);
-  }
+  const incorrectAlternative = createBoard(9, 9, [...flagged, alternateMine]);
+  const clue = index(3, 2); // Green 2 next to the lower covered square.
+  assert.equal(actual.counts[clue], 2);
+  assert.equal(incorrectAlternative.counts[clue], 3);
   assert.equal(actual.mines[actualMine], 1);
-  assert.equal(alternate.mines[actualMine], 0);
   assert.equal(actual.mines[alternateMine], 0);
-  assert.equal(alternate.mines[alternateMine], 1);
+});
+
+test('incident: the two covered squares are resolved without guessing', () => {
+  // The revealed 2 at row 3, column 2 already sees two flagged mines:
+  // row 2, column 3 and row 3, column 1. Thus row 2, column 1 is safe.
+  const clue = index(3, 2);
+  const adjacentFlags = neighborsOf(clue, 9, 9).filter(i => flagged.includes(i));
+  assert.equal(adjacentFlags.length, 2);
+  assert.equal(adjacentFlags.includes(index(2, 3)), true);
+  assert.equal(adjacentFlags.includes(index(3, 1)), true);
+  // With exactly one unflagged mine remaining, row 1, column 1 must be mined.
+  assert.equal(flagged.length, 9);
+  assert.equal(actualMine, index(1, 1));
 });
 
 test('solver rejects an initial position with an unavoidable ambiguous choice', () => {
